@@ -34,6 +34,7 @@ import com.orientechnologies.orient.core.config.OContextConfiguration;
 import com.orientechnologies.orient.core.config.OGlobalConfiguration;
 import com.orientechnologies.orient.core.db.ODatabaseDocumentInternal;
 import com.orientechnologies.orient.core.db.ODatabaseType;
+import com.orientechnologies.orient.core.db.OSystemDatabase;
 import com.orientechnologies.orient.core.db.OrientDB;
 import com.orientechnologies.orient.core.db.OrientDBConfig;
 import com.orientechnologies.orient.core.db.OrientDBInternal;
@@ -118,7 +119,6 @@ public class OServer {
   private OPushManager pushManager;
   private ClassLoader extensionClassLoader;
   private OTokenHandler tokenHandler;
-  private OSystemDatabase systemDatabase;
   private OrientDB context;
   private OrientDBInternal databases;
   protected Date startedOn = new Date();
@@ -261,7 +261,7 @@ public class OServer {
   }
 
   public OSystemDatabase getSystemDatabase() {
-    return systemDatabase;
+    return databases.getSystemDatabase();
   }
 
   public String getServerId() {
@@ -1273,7 +1273,7 @@ public class OServer {
   }
 
   private void initSystemDatabase() {
-    systemDatabase = new OSystemDatabase(this.getDatabases());
+    databases.getSystemDatabase().init();
   }
 
   public OrientDBInternal getDatabases() {
