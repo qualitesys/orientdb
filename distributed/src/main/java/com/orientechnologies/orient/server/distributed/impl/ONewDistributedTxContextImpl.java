@@ -179,4 +179,9 @@ public class ONewDistributedTxContextImpl implements ODistributedTxContext {
   public OTransactionId getTransactionId() {
     return transactionId;
   }
+
+  public void unlock(ORID rid) {
+    shared.getRecordLockManager().unlock(rid);
+    lockedRids.remove(rid);
+  }
 }

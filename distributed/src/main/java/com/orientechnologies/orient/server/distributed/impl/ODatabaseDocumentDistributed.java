@@ -453,7 +453,8 @@ public class ODatabaseDocumentDistributed extends ODatabaseDocumentEmbedded {
     }
   }
 
-  public void acquireLocksForTx(OTransactionInternal tx, ODistributedTxContext txContext) {
+  public void acquireLocksForTx(
+      OTransactionInternal tx, ODistributedTxContext txContext, boolean local) {
     // Sort and lock transaction entry in distributed environment
     Set<ORID> rids = new TreeSet<>();
     for (ORecordOperation entry : tx.getRecordOperations()) {
@@ -461,6 +462,9 @@ public class ODatabaseDocumentDistributed extends ODatabaseDocumentEmbedded {
         rids.add(entry.getRID().copy());
       } else {
         rids.add(new ORecordId(entry.getRID().getClusterId(), -1));
+        if (!local) {
+          rids.add(entry.getRID().copy());
+        }
       }
     }
     for (ORID rid : rids) {
@@ -764,9 +768,24 @@ public class ODatabaseDocumentDistributed extends ODatabaseDocumentEmbedded {
     }
     localDb.getManager().messageBeforeOp("locks", txContext.getReqId());
 
-    acquireLocksForTx(transaction, txContext);
+    acquireLocksForTx(transaction, txContext, local);
 
     firstPhaseDataChecks(local, transaction, txContext);
+
+    releaseAllocationLocks(transaction, txContext);
+  }
+
+  private void releaseAllocationLocks(
+      OTransactionInternal tx, ONewDistributedTxContextImpl txContext) {
+    Set<ORID> rids = new TreeSet<>();
+    for (ORecordOperation entry : tx.getRecordOperations()) {
+      if (entry.getType() == ORecordOperation.CREATED) {
+        rids.add(new ORecordId(entry.getRID().getClusterId(), -1));
+      }
+    }
+    for (ORID rid : rids) {
+      txContext.unlock(rid);
+    }
   }
 
   private void firstPhaseDataChecks(
@@ -777,6 +796,9 @@ public class ODatabaseDocumentDistributed extends ODatabaseDocumentEmbedded {
 
     getDistributedShared().getManager().messageBeforeOp("allocate", txContext.getReqId());
     ((OAbstractPaginatedStorage) getStorage().getUnderlying()).preallocateRids(transaction);
+    if (local) {
+      acquireLocksJustAllocated(transaction, txContext);
+    }
     getDistributedShared().getManager().messageAfterOp("allocate", txContext.getReqId());
 
     getDistributedShared().getManager().messageBeforeOp("indexCheck", txContext.getReqId());
@@ -888,6 +910,18 @@ public class ODatabaseDocumentDistributed extends ODatabaseDocumentEmbedded {
       }
     }
     getDistributedShared().getManager().messageAfterOp("mvccCheck", txContext.getReqId());
+  }
+
+  private void acquireLocksJustAllocated(OTransactionInternal tx, ODistributedTxContext txContext) {
+    Set<ORID> rids = new TreeSet<>();
+    for (ORecordOperation entry : tx.getRecordOperations()) {
+      if (entry.getType() == ORecordOperation.CREATED) {
+        rids.add(entry.getRID().copy());
+      }
+    }
+    for (ORID rid : rids) {
+      txContext.lock(rid);
+    }
   }
 
   @Override
