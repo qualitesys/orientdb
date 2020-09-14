@@ -81,14 +81,14 @@ public class BTreeBonsaiGlobalTestIT {
     for (int i = 0; i < KEYS_COUNT; i++) {
       final int index = i;
       atomicOperationsManager.executeInsideAtomicOperation(
-          (atomicOperation) -> bTree.put(atomicOperation, index % 32000, index, index + 1));
+          (atomicOperation) -> bTree.put(atomicOperation, 42, index % 32000, index, index + 1));
     }
     long end = System.nanoTime();
     System.out.printf("%d us per insert%n", (end - start) / 1_000 / KEYS_COUNT);
 
     start = System.nanoTime();
     for (int i = 0; i < KEYS_COUNT; i++) {
-      Assertions.assertThat(bTree.get(i % 32000, i)).isEqualTo(i + 1);
+      Assertions.assertThat(bTree.get(42, i % 32000, i)).isEqualTo(i + 1);
     }
     end = System.nanoTime();
 
@@ -98,7 +98,7 @@ public class BTreeBonsaiGlobalTestIT {
     //          Assert.assertEquals(KEYS_COUNT - 1, (int) sbTree.lastKey());
 
     for (int i = KEYS_COUNT; i < KEYS_COUNT + 100; i++) {
-      Assert.assertEquals(bTree.get(i % 32000, i), -1);
+      Assert.assertEquals(bTree.get(42, i % 32000, i), -1);
     }
   }
 }

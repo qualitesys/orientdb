@@ -89,13 +89,13 @@ public final class BTreeBonsaiGlobal extends ODurableComponent {
         });
   }
 
-  public int get(final int targetCluster, final long targetPosition) {
+  public int get(final long ownerId, final int targetCluster, final long targetPosition) {
     atomicOperationsManager.acquireReadLock(this);
     try {
       acquireSharedLock();
       try {
         final OAtomicOperation atomicOperation = OAtomicOperationsManager.getCurrentOperation();
-        final EdgeKey key = new EdgeKey(targetCluster, targetPosition);
+        final EdgeKey key = new EdgeKey(ownerId, targetCluster, targetPosition);
         final BucketSearchResult bucketSearchResult = findBucket(key, atomicOperation);
         if (bucketSearchResult.itemIndex < 0) {
           return -1;
@@ -125,6 +125,7 @@ public final class BTreeBonsaiGlobal extends ODurableComponent {
 
   public void put(
       final OAtomicOperation atomicOperation,
+      final long ownerId,
       final int targetCluster,
       final long targetPosition,
       final int value) {
@@ -133,7 +134,7 @@ public final class BTreeBonsaiGlobal extends ODurableComponent {
         operation -> {
           acquireExclusiveLock();
           try {
-            final EdgeKey key = new EdgeKey(targetCluster, targetPosition);
+            final EdgeKey key = new EdgeKey(ownerId, targetCluster, targetPosition);
             final byte[] serializedKey =
                 EdgeKeySerializer.INSTANCE.serializeNativeAsWhole(key, (Object[]) null);
             UpdateBucketSearchResult bucketSearchResult = findBucketForUpdate(key, atomicOperation);

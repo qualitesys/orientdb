@@ -12,7 +12,7 @@ public class EdgeKeySerializerTest {
 
   @Test
   public void testSerialization() {
-    final EdgeKey edgeKey = new EdgeKey(24, 67);
+    final EdgeKey edgeKey = new EdgeKey(42, 24, 67);
     final EdgeKeySerializer edgeKeySerializer = new EdgeKeySerializer();
 
     final int serializedSize = edgeKeySerializer.getObjectSize(edgeKey);
@@ -29,7 +29,7 @@ public class EdgeKeySerializerTest {
 
   @Test
   public void testBufferSerialization() {
-    final EdgeKey edgeKey = new EdgeKey(24, 67);
+    final EdgeKey edgeKey = new EdgeKey(42, 24, 67);
     final EdgeKeySerializer edgeKeySerializer = new EdgeKeySerializer();
 
     final int serializedSize = edgeKeySerializer.getObjectSize(edgeKey);
@@ -51,7 +51,7 @@ public class EdgeKeySerializerTest {
 
   @Test
   public void testChangesSerialization() {
-    final EdgeKey edgeKey = new EdgeKey(24, 67);
+    final EdgeKey edgeKey = new EdgeKey(42, 24, 67);
     final EdgeKeySerializer edgeKeySerializer = new EdgeKeySerializer();
 
     final int serializedSize = edgeKeySerializer.getObjectSize(edgeKey);
