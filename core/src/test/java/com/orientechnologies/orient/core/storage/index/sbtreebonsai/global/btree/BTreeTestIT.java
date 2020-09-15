@@ -31,10 +31,10 @@ import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 
 @RunWith(Parameterized.class)
-public class BTreeBonsaiGlobalTestIT {
+public class BTreeTestIT {
 
   private static OrientDB orientDB;
-  private static BTreeBonsaiGlobal bTree;
+  private static BTree bTree;
   private static OAtomicOperationsManager atomicOperationsManager;
   private static OAbstractPaginatedStorage storage;
   private static String buildDirectory;
@@ -46,7 +46,7 @@ public class BTreeBonsaiGlobalTestIT {
 
   private final int keysCount;
 
-  public BTreeBonsaiGlobalTestIT(int keysCount) {
+  public BTreeTestIT(int keysCount) {
     this.keysCount = keysCount;
   }
 
@@ -86,7 +86,7 @@ public class BTreeBonsaiGlobalTestIT {
   @Before
   public void beforeMethod() throws Exception {
 
-    bTree = new BTreeBonsaiGlobal(storage, "bonsaiGlobal", ".sbc");
+    bTree = new BTree(storage, "bonsaiGlobal", ".sbc");
     atomicOperationsManager.executeInsideAtomicOperation(
         (atomicOperation) -> bTree.create(atomicOperation));
   }

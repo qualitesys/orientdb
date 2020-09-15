@@ -26,7 +26,8 @@ import java.util.function.Consumer;
 import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
 
-public final class BTreeBonsaiGlobal extends ODurableComponent {
+public final class BTree extends ODurableComponent {
+
   private static final int MAX_PATH_LENGTH =
       OGlobalConfiguration.SBTREE_MAX_DEPTH.getValueAsInteger();
 
@@ -35,7 +36,7 @@ public final class BTreeBonsaiGlobal extends ODurableComponent {
 
   private volatile long fileId;
 
-  public BTreeBonsaiGlobal(
+  public BTree(
       final OAbstractPaginatedStorage storage, final String name, final String fileExtension) {
     super(storage, name, fileExtension, name + fileExtension);
   }
@@ -971,7 +972,7 @@ public final class BTreeBonsaiGlobal extends ODurableComponent {
       dataCache.clear();
       cacheIterator = Collections.emptyIterator();
 
-      atomicOperationsManager.acquireReadLock(BTreeBonsaiGlobal.this);
+      atomicOperationsManager.acquireReadLock(BTree.this);
       try {
         acquireSharedLock();
         try {
@@ -1031,7 +1032,7 @@ public final class BTreeBonsaiGlobal extends ODurableComponent {
       } catch (final IOException e) {
         throw OException.wrapException(new OStorageException("Error during element iteration"), e);
       } finally {
-        atomicOperationsManager.releaseReadLock(BTreeBonsaiGlobal.this);
+        atomicOperationsManager.releaseReadLock(BTree.this);
       }
     }
 
@@ -1173,7 +1174,7 @@ public final class BTreeBonsaiGlobal extends ODurableComponent {
       dataCache.clear();
       cacheIterator = Collections.emptyIterator();
 
-      atomicOperationsManager.acquireReadLock(BTreeBonsaiGlobal.this);
+      atomicOperationsManager.acquireReadLock(BTree.this);
       try {
         acquireSharedLock();
         try {
@@ -1233,7 +1234,7 @@ public final class BTreeBonsaiGlobal extends ODurableComponent {
       } catch (final IOException e) {
         throw OException.wrapException(new OStorageException("Error during element iteration"), e);
       } finally {
-        atomicOperationsManager.releaseReadLock(BTreeBonsaiGlobal.this);
+        atomicOperationsManager.releaseReadLock(BTree.this);
       }
     }
 
