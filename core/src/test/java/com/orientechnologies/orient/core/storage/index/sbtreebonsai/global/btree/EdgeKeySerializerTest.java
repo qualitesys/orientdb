@@ -1,8 +1,10 @@
-package com.orientechnologies.orient.core.storage.index.sbtreebonsai.global;
+package com.orientechnologies.orient.core.storage.index.sbtreebonsai.global.btree;
 
 import com.orientechnologies.orient.core.config.OGlobalConfiguration;
 import com.orientechnologies.orient.core.storage.impl.local.paginated.wal.OWALChanges;
 import com.orientechnologies.orient.core.storage.impl.local.paginated.wal.OWALPageChangesPortion;
+import com.orientechnologies.orient.core.storage.index.sbtreebonsai.global.btree.EdgeKey;
+import com.orientechnologies.orient.core.storage.index.sbtreebonsai.global.btree.EdgeKeySerializer;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import org.junit.Assert;

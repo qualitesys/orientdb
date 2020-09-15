@@ -1,7 +1,9 @@
-package com.orientechnologies.orient.core.storage.index.sbtreebonsai.global;
+package com.orientechnologies.orient.core.storage.index.sbtreebonsai.global.btree;
 
 import com.orientechnologies.common.serialization.types.OBinarySerializer;
 import com.orientechnologies.orient.core.storage.impl.local.paginated.wal.OWALChanges;
+import com.orientechnologies.orient.core.storage.index.sbtreebonsai.global.IntSerializer;
+import com.orientechnologies.orient.core.storage.index.sbtreebonsai.global.LongSerializer;
 import java.nio.ByteBuffer;
 
 final class EdgeKeySerializer implements OBinarySerializer<EdgeKey> {

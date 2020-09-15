@@ -1,4 +1,4 @@
-package com.orientechnologies.orient.core.storage.index.sbtreebonsai.global;
+package com.orientechnologies.orient.core.storage.index.sbtreebonsai.global.btree;
 
 final class EdgeKey implements Comparable<EdgeKey> {
 

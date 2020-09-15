@@ -4,7 +4,7 @@ import com.orientechnologies.common.serialization.types.OLongSerializer;
 import com.orientechnologies.orient.core.storage.cache.OCacheEntry;
 import com.orientechnologies.orient.core.storage.impl.local.paginated.base.ODurablePage;
 
-final class EntryPoint extends ODurablePage {
+public final class EntryPoint extends ODurablePage {
 
   private static final int TREE_SIZE_OFFSET = NEXT_FREE_POSITION;
   private static final int PAGES_SIZE_OFFSET = TREE_SIZE_OFFSET + OLongSerializer.LONG_SIZE;

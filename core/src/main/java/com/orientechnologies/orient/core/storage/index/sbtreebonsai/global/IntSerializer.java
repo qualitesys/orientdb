@@ -4,9 +4,9 @@ import com.orientechnologies.common.serialization.types.OBinarySerializer;
 import com.orientechnologies.orient.core.storage.impl.local.paginated.wal.OWALChanges;
 import java.nio.ByteBuffer;
 
-final class IntSerializer implements OBinarySerializer<Integer> {
+public final class IntSerializer implements OBinarySerializer<Integer> {
 
-  static final IntSerializer INSTANCE = new IntSerializer();
+  public static final IntSerializer INSTANCE = new IntSerializer();
 
   @Override
   public int getObjectSize(Integer object, Object... hints) {
@@ -123,7 +123,7 @@ final class IntSerializer implements OBinarySerializer<Integer> {
     return walChanges.getByteValue(buffer, offset) + 1;
   }
 
-  int serializePrimitive(final byte[] stream, int startPosition, int value) {
+  public int serializePrimitive(final byte[] stream, int startPosition, int value) {
     final int zeroBits = Integer.numberOfLeadingZeros(value);
     final int zerosTillFullByte = zeroBits & 7;
     final int numberSize = 4 - (zeroBits - zerosTillFullByte) / 8;

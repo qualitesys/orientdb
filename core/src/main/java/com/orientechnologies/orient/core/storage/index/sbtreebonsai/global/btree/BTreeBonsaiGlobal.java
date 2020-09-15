@@ -1,4 +1,4 @@
-package com.orientechnologies.orient.core.storage.index.sbtreebonsai.global;
+package com.orientechnologies.orient.core.storage.index.sbtreebonsai.global.btree;
 
 import com.orientechnologies.common.exception.OException;
 import com.orientechnologies.common.util.ORawPair;
@@ -10,6 +10,8 @@ import com.orientechnologies.orient.core.storage.impl.local.paginated.atomicoper
 import com.orientechnologies.orient.core.storage.impl.local.paginated.atomicoperations.OAtomicOperationsManager;
 import com.orientechnologies.orient.core.storage.impl.local.paginated.base.ODurableComponent;
 import com.orientechnologies.orient.core.storage.impl.local.paginated.wal.OLogSequenceNumber;
+import com.orientechnologies.orient.core.storage.index.sbtreebonsai.global.EntryPoint;
+import com.orientechnologies.orient.core.storage.index.sbtreebonsai.global.IntSerializer;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;

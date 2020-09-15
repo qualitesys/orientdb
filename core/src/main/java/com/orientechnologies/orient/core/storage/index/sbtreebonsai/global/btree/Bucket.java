@@ -1,11 +1,12 @@
-package com.orientechnologies.orient.core.storage.index.sbtreebonsai.global;
+package com.orientechnologies.orient.core.storage.index.sbtreebonsai.global.btree;
 
 import com.orientechnologies.common.serialization.types.OByteSerializer;
 import com.orientechnologies.common.serialization.types.OIntegerSerializer;
 import com.orientechnologies.common.serialization.types.OLongSerializer;
 import com.orientechnologies.orient.core.storage.cache.OCacheEntry;
 import com.orientechnologies.orient.core.storage.impl.local.paginated.base.ODurablePage;
-import com.orientechnologies.orient.core.storage.index.sbtreebonsai.global.BTreeBonsaiGlobal.TreeEntry;
+import com.orientechnologies.orient.core.storage.index.sbtreebonsai.global.IntSerializer;
+import com.orientechnologies.orient.core.storage.index.sbtreebonsai.global.btree.BTreeBonsaiGlobal.TreeEntry;
 import java.util.ArrayList;
 import java.util.List;
 
