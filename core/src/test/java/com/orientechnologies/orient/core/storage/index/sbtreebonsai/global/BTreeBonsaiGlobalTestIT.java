@@ -1,6 +1,7 @@
 package com.orientechnologies.orient.core.storage.index.sbtreebonsai.global;
 
 import com.orientechnologies.common.io.OFileUtils;
+import com.orientechnologies.common.util.ORawPair;
 import com.orientechnologies.orient.core.db.ODatabaseInternal;
 import com.orientechnologies.orient.core.db.ODatabaseSession;
 import com.orientechnologies.orient.core.db.ODatabaseType;
@@ -9,14 +10,16 @@ import com.orientechnologies.orient.core.db.OrientDBConfig;
 import com.orientechnologies.orient.core.storage.impl.local.OAbstractPaginatedStorage;
 import com.orientechnologies.orient.core.storage.impl.local.paginated.atomicoperations.OAtomicOperationsManager;
 import java.io.File;
-import java.util.Arrays;
-import java.util.Collections;
 import java.util.Iterator;
+import java.util.Map;
+import java.util.NavigableMap;
 import java.util.NavigableSet;
 import java.util.Random;
+import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
+import java.util.stream.Stream;
 import org.assertj.core.api.Assertions;
 import org.junit.After;
 import org.junit.AfterClass;
@@ -38,7 +41,7 @@ public class BTreeBonsaiGlobalTestIT {
 
   @Parameterized.Parameters
   public static Iterable<Integer> keysCount() {
-    return IntStream.range(1, 21).map(val -> 1 << val).boxed().collect(Collectors.toList());
+    return IntStream.range(0, 21).map(val -> 1 << val).boxed().collect(Collectors.toList());
   }
 
   private final int keysCount;
@@ -305,8 +308,8 @@ public class BTreeBonsaiGlobalTestIT {
       if (key.targetPosition % 3 == 0) {
 
         atomicOperationsManager.executeInsideAtomicOperation(
-            atomicOperation -> Assert
-                .assertEquals(bTree.remove(atomicOperation, key), key.targetPosition));
+            atomicOperation ->
+                Assert.assertEquals(bTree.remove(atomicOperation, key), key.targetPosition));
       }
     }
 
@@ -362,6 +365,291 @@ public class BTreeBonsaiGlobalTestIT {
       if (i % 2 == 0) {
         final EdgeKey key = new EdgeKey(42, i + keysCount, i + keysCount);
         Assert.assertEquals(bTree.get(key), (i + keysCount) % 5);
+      }
+    }
+  }
+
+  @Test
+  public void testIterateEntriesMajor() throws Exception {
+    System.out.printf("Keys count %d%n", keysCount);
+
+    NavigableMap<EdgeKey, Integer> keyValues = new TreeMap<>();
+    final long seed = System.nanoTime();
+
+    System.out.println("testIterateEntriesMajor: " + seed);
+    final Random random = new Random(seed);
+
+    int printCounter = 0;
+
+    while (keyValues.size() < keysCount) {
+      atomicOperationsManager.executeInsideAtomicOperation(
+          atomicOperation -> {
+            final int val = random.nextInt(Integer.MAX_VALUE);
+            final EdgeKey key = new EdgeKey(42, val, val % 64937);
+
+            bTree.put(atomicOperation, key, val);
+            keyValues.put(key, val);
+          });
+
+      if (keyValues.size() > printCounter * 100_000) {
+        System.out.println(keyValues.size() + " entries were added.");
+        printCounter++;
+      }
+    }
+
+    assertIterateMajorEntries(keyValues, random, true, true);
+    assertIterateMajorEntries(keyValues, random, false, true);
+
+    assertIterateMajorEntries(keyValues, random, true, false);
+    assertIterateMajorEntries(keyValues, random, false, false);
+
+    Assert.assertEquals(bTree.firstKey(), keyValues.firstKey());
+    Assert.assertEquals(bTree.lastKey(), keyValues.lastKey());
+  }
+
+  private void assertIterateMajorEntries(
+      NavigableMap<EdgeKey, Integer> keyValues,
+      Random random,
+      boolean keyInclusive,
+      boolean ascSortOrder) {
+    EdgeKey[] keys = new EdgeKey[keyValues.size()];
+    int index = 0;
+
+    for (EdgeKey key : keyValues.keySet()) {
+      keys[index] = key;
+      index++;
+    }
+
+    for (int i = 0; i < 100; i++) {
+      final int fromKeyIndex = random.nextInt(keys.length);
+      EdgeKey fromKey = keys[fromKeyIndex];
+
+      if (random.nextBoolean() && fromKey.targetPosition > Long.MIN_VALUE) {
+        fromKey = new EdgeKey(fromKey.ownerId, fromKey.targetCluster, fromKey.targetPosition - 1);
+      }
+
+      final Iterator<ORawPair<EdgeKey, Integer>> indexIterator;
+      try (Stream<ORawPair<EdgeKey, Integer>> stream =
+          bTree.iterateEntriesMajor(fromKey, keyInclusive, ascSortOrder)) {
+        indexIterator = stream.iterator();
+
+        Iterator<Map.Entry<EdgeKey, Integer>> iterator;
+        if (ascSortOrder) {
+          iterator = keyValues.tailMap(fromKey, keyInclusive).entrySet().iterator();
+        } else {
+          iterator =
+              keyValues
+                  .descendingMap()
+                  .subMap(keyValues.lastKey(), true, fromKey, keyInclusive)
+                  .entrySet()
+                  .iterator();
+        }
+
+        while (iterator.hasNext()) {
+          final ORawPair<EdgeKey, Integer> indexEntry = indexIterator.next();
+          final Map.Entry<EdgeKey, Integer> entry = iterator.next();
+
+          Assert.assertEquals(indexEntry.first, entry.getKey());
+          Assert.assertEquals(indexEntry.second, entry.getValue());
+        }
+
+        //noinspection ConstantConditions
+        Assert.assertFalse(iterator.hasNext());
+        Assert.assertFalse(indexIterator.hasNext());
+      }
+    }
+  }
+
+  @Test
+  public void testIterateEntriesMinor() throws Exception {
+    System.out.printf("Keys count %d%n", keysCount);
+    NavigableMap<EdgeKey, Integer> keyValues = new TreeMap<>();
+
+    final long seed = System.nanoTime();
+
+    System.out.println("testIterateEntriesMinor: " + seed);
+    final Random random = new Random(seed);
+
+    int printCounter = 0;
+
+    while (keyValues.size() < keysCount) {
+      atomicOperationsManager.executeInsideAtomicOperation(
+          atomicOperation -> {
+            final int val = random.nextInt(Integer.MAX_VALUE);
+
+            EdgeKey key = new EdgeKey(42, val, val % 64937);
+            bTree.put(atomicOperation, key, val);
+            keyValues.put(key, val);
+          });
+
+      if (keyValues.size() > printCounter * 100_000) {
+        System.out.println(keyValues.size() + " entries were added.");
+        printCounter++;
+      }
+    }
+
+    assertIterateMinorEntries(keyValues, random, true, true);
+    assertIterateMinorEntries(keyValues, random, false, true);
+
+    assertIterateMinorEntries(keyValues, random, true, false);
+    assertIterateMinorEntries(keyValues, random, false, false);
+
+    Assert.assertEquals(bTree.firstKey(), keyValues.firstKey());
+    Assert.assertEquals(bTree.lastKey(), keyValues.lastKey());
+  }
+
+  private void assertIterateMinorEntries(
+      NavigableMap<EdgeKey, Integer> keyValues,
+      Random random,
+      boolean keyInclusive,
+      boolean ascSortOrder) {
+    EdgeKey[] keys = new EdgeKey[keyValues.size()];
+    int index = 0;
+
+    for (EdgeKey key : keyValues.keySet()) {
+      keys[index] = key;
+      index++;
+    }
+
+    for (int i = 0; i < 100; i++) {
+      int toKeyIndex = random.nextInt(keys.length);
+      EdgeKey toKey = keys[toKeyIndex];
+      if (random.nextBoolean()) {
+        toKey = new EdgeKey(toKey.ownerId, toKey.targetCluster, toKey.targetPosition + 1);
+      }
+
+      final Iterator<ORawPair<EdgeKey, Integer>> indexIterator;
+      try (Stream<ORawPair<EdgeKey, Integer>> stream =
+          bTree.iterateEntriesMinor(toKey, keyInclusive, ascSortOrder)) {
+        indexIterator = stream.iterator();
+
+        Iterator<Map.Entry<EdgeKey, Integer>> iterator;
+        if (ascSortOrder) {
+          iterator = keyValues.headMap(toKey, keyInclusive).entrySet().iterator();
+        } else {
+          iterator = keyValues.headMap(toKey, keyInclusive).descendingMap().entrySet().iterator();
+        }
+
+        while (iterator.hasNext()) {
+          ORawPair<EdgeKey, Integer> indexEntry = indexIterator.next();
+          Map.Entry<EdgeKey, Integer> entry = iterator.next();
+
+          Assert.assertEquals(indexEntry.first, entry.getKey());
+          Assert.assertEquals(indexEntry.second, entry.getValue());
+        }
+
+        //noinspection ConstantConditions
+        Assert.assertFalse(iterator.hasNext());
+        Assert.assertFalse(indexIterator.hasNext());
+      }
+    }
+  }
+
+  @Test
+  public void testIterateEntriesBetween() throws Exception {
+    System.out.printf("Keys count %d%n", keysCount);
+
+    NavigableMap<EdgeKey, Integer> keyValues = new TreeMap<>();
+    final Random random = new Random();
+
+    int printCounter = 0;
+
+    while (keyValues.size() < keysCount) {
+      atomicOperationsManager.executeInsideAtomicOperation(
+          atomicOperation -> {
+            int val = random.nextInt(Integer.MAX_VALUE);
+            EdgeKey key = new EdgeKey(42, val, val % 64937);
+            bTree.put(atomicOperation, key, val);
+            keyValues.put(key, val);
+          });
+
+      if (keyValues.size() > printCounter * 100_000) {
+        System.out.println(keyValues.size() + " entries were added.");
+        printCounter++;
+      }
+    }
+    assertIterateBetweenEntries(keyValues, random, true, true, true);
+    assertIterateBetweenEntries(keyValues, random, true, false, true);
+    assertIterateBetweenEntries(keyValues, random, false, true, true);
+    assertIterateBetweenEntries(keyValues, random, false, false, true);
+
+    assertIterateBetweenEntries(keyValues, random, true, true, false);
+    assertIterateBetweenEntries(keyValues, random, true, false, false);
+    assertIterateBetweenEntries(keyValues, random, false, true, false);
+    assertIterateBetweenEntries(keyValues, random, false, false, false);
+
+    Assert.assertEquals(bTree.firstKey(), keyValues.firstKey());
+    Assert.assertEquals(bTree.lastKey(), keyValues.lastKey());
+  }
+
+  private void assertIterateBetweenEntries(
+      NavigableMap<EdgeKey, Integer> keyValues,
+      Random random,
+      boolean fromInclusive,
+      boolean toInclusive,
+      boolean ascSortOrder) {
+    EdgeKey[] keys = new EdgeKey[keyValues.size()];
+    int index = 0;
+
+    for (EdgeKey key : keyValues.keySet()) {
+      keys[index] = key;
+      index++;
+    }
+
+    for (int i = 0; i < 100; i++) {
+      int fromKeyIndex = random.nextInt(keys.length);
+      int toKeyIndex = random.nextInt(keys.length);
+
+      if (fromKeyIndex > toKeyIndex) {
+        toKeyIndex = fromKeyIndex;
+      }
+
+      EdgeKey fromKey = keys[fromKeyIndex];
+      EdgeKey toKey = keys[toKeyIndex];
+
+      if (random.nextBoolean()) {
+        fromKey = new EdgeKey(fromKey.ownerId, fromKey.targetCluster, fromKey.targetPosition - 1);
+      }
+
+      if (random.nextBoolean()) {
+        toKey = new EdgeKey(toKey.ownerId, toKey.targetCluster, toKey.targetPosition + 1);
+      }
+
+      if (fromKey.compareTo(toKey) > 0) {
+        fromKey = toKey;
+      }
+
+      final Iterator<ORawPair<EdgeKey, Integer>> indexIterator;
+      try (Stream<ORawPair<EdgeKey, Integer>> stream =
+          bTree.iterateEntriesBetween(
+              fromKey, fromInclusive, toKey, toInclusive, ascSortOrder)) {
+        indexIterator = stream.iterator();
+
+        Iterator<Map.Entry<EdgeKey, Integer>> iterator;
+        if (ascSortOrder) {
+          iterator =
+              keyValues.subMap(fromKey, fromInclusive, toKey, toInclusive).entrySet().iterator();
+        } else {
+          iterator =
+              keyValues
+                  .descendingMap()
+                  .subMap(toKey, toInclusive, fromKey, fromInclusive)
+                  .entrySet()
+                  .iterator();
+        }
+
+        while (iterator.hasNext()) {
+          ORawPair<EdgeKey, Integer> indexEntry = indexIterator.next();
+          Assert.assertNotNull(indexEntry);
+
+          Map.Entry<EdgeKey, Integer> mapEntry = iterator.next();
+          Assert.assertEquals(indexEntry.first, mapEntry.getKey());
+          Assert.assertEquals(indexEntry.second, mapEntry.getValue());
+        }
+
+        //noinspection ConstantConditions
+        Assert.assertFalse(iterator.hasNext());
+        Assert.assertFalse(indexIterator.hasNext());
       }
     }
   }

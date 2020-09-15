@@ -81,6 +81,13 @@ public class ODurablePage {
     return new OLogSequenceNumber(segment, position);
   }
 
+  public final OLogSequenceNumber getLSN() {
+    final long segment = getLongValue(WAL_SEGMENT_OFFSET);
+    final long position = getLongValue(WAL_SEGMENT_OFFSET + OLongSerializer.LONG_SIZE);
+
+    return new OLogSequenceNumber(segment, position);
+  }
+
   /**
    * DO NOT DELETE THIS METHOD IT IS USED IN ENTERPRISE STORAGE
    * <p>
