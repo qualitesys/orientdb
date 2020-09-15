@@ -12,8 +12,10 @@ import com.orientechnologies.orient.core.storage.impl.local.paginated.atomicoper
 import com.orientechnologies.orient.core.storage.impl.local.paginated.base.ODurableComponent;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 
 public final class BTreeBonsaiGlobal extends ODurableComponent {
 
@@ -89,13 +91,12 @@ public final class BTreeBonsaiGlobal extends ODurableComponent {
         });
   }
 
-  public int get(final long ownerId, final int targetCluster, final long targetPosition) {
+  public int get(final EdgeKey key) {
     atomicOperationsManager.acquireReadLock(this);
     try {
       acquireSharedLock();
       try {
         final OAtomicOperation atomicOperation = OAtomicOperationsManager.getCurrentOperation();
-        final EdgeKey key = new EdgeKey(ownerId, targetCluster, targetPosition);
         final BucketSearchResult bucketSearchResult = findBucket(key, atomicOperation);
         if (bucketSearchResult.itemIndex < 0) {
           return -1;
@@ -123,18 +124,12 @@ public final class BTreeBonsaiGlobal extends ODurableComponent {
     }
   }
 
-  public void put(
-      final OAtomicOperation atomicOperation,
-      final long ownerId,
-      final int targetCluster,
-      final long targetPosition,
-      final int value) {
+  public void put(final OAtomicOperation atomicOperation, final EdgeKey key, final int value) {
     executeInsideComponentOperation(
         atomicOperation,
         operation -> {
           acquireExclusiveLock();
           try {
-            final EdgeKey key = new EdgeKey(ownerId, targetCluster, targetPosition);
             final byte[] serializedKey =
                 EdgeKeySerializer.INSTANCE.serializeNativeAsWhole(key, (Object[]) null);
             UpdateBucketSearchResult bucketSearchResult = findBucketForUpdate(key, atomicOperation);
@@ -209,6 +204,195 @@ public final class BTreeBonsaiGlobal extends ODurableComponent {
             releaseExclusiveLock();
           }
         });
+  }
+
+  public EdgeKey firstKey() {
+    atomicOperationsManager.acquireReadLock(this);
+    try {
+      acquireSharedLock();
+      try {
+        final OAtomicOperation atomicOperation = OAtomicOperationsManager.getCurrentOperation();
+
+        final Optional<BucketSearchResult> searchResult = firstItem(atomicOperation);
+        if (!searchResult.isPresent()) {
+          return null;
+        }
+
+        final BucketSearchResult result = searchResult.get();
+        final OCacheEntry cacheEntry =
+            loadPageForRead(atomicOperation, fileId, result.pageIndex, false);
+        try {
+          final Bucket bucket = new Bucket(cacheEntry);
+          return bucket.getKey(result.itemIndex);
+        } finally {
+          releasePageFromRead(atomicOperation, cacheEntry);
+        }
+      } finally {
+        releaseSharedLock();
+      }
+    } catch (final IOException e) {
+      throw OException.wrapException(
+          new OStorageException("Error during finding first key in btree [" + getName() + "]"), e);
+    } finally {
+      atomicOperationsManager.releaseReadLock(this);
+    }
+  }
+
+  private Optional<BucketSearchResult> firstItem(final OAtomicOperation atomicOperation)
+      throws IOException {
+    final LinkedList<PagePathItemUnit> path = new LinkedList<>();
+
+    long bucketIndex = ROOT_INDEX;
+
+    OCacheEntry cacheEntry = loadPageForRead(atomicOperation, fileId, bucketIndex, false);
+    int itemIndex = 0;
+    try {
+      Bucket bucket = new Bucket(cacheEntry);
+
+      while (true) {
+        if (!bucket.isLeaf()) {
+          if (bucket.isEmpty() || itemIndex > bucket.size()) {
+            if (!path.isEmpty()) {
+              final PagePathItemUnit pagePathItemUnit = path.removeLast();
+
+              bucketIndex = pagePathItemUnit.pageIndex;
+              itemIndex = pagePathItemUnit.itemIndex + 1;
+            } else {
+              return Optional.empty();
+            }
+          } else {
+            //noinspection ObjectAllocationInLoop
+            path.add(new PagePathItemUnit(bucketIndex, itemIndex));
+
+            if (itemIndex < bucket.size()) {
+              bucketIndex = bucket.getLeft(itemIndex);
+            } else {
+              bucketIndex = bucket.getRight(itemIndex - 1);
+            }
+
+            itemIndex = 0;
+          }
+        } else {
+          if (bucket.isEmpty()) {
+            if (!path.isEmpty()) {
+              final PagePathItemUnit pagePathItemUnit = path.removeLast();
+
+              bucketIndex = pagePathItemUnit.pageIndex;
+              itemIndex = pagePathItemUnit.itemIndex + 1;
+            } else {
+              return Optional.empty();
+            }
+          } else {
+            return Optional.of(new BucketSearchResult(0, bucketIndex));
+          }
+        }
+
+        releasePageFromRead(atomicOperation, cacheEntry);
+
+        cacheEntry = loadPageForRead(atomicOperation, fileId, bucketIndex, false);
+        //noinspection ObjectAllocationInLoop
+        bucket = new Bucket(cacheEntry);
+      }
+    } finally {
+      releasePageFromRead(atomicOperation, cacheEntry);
+    }
+  }
+
+  public EdgeKey lastKey() {
+    atomicOperationsManager.acquireReadLock(this);
+    try {
+      acquireSharedLock();
+      try {
+        final OAtomicOperation atomicOperation = OAtomicOperationsManager.getCurrentOperation();
+
+        final Optional<BucketSearchResult> searchResult = lastItem(atomicOperation);
+        if (!searchResult.isPresent()) {
+          return null;
+        }
+
+        final BucketSearchResult result = searchResult.get();
+        final OCacheEntry cacheEntry =
+            loadPageForRead(atomicOperation, fileId, result.pageIndex, false);
+        try {
+          final Bucket bucket = new Bucket(cacheEntry);
+          return bucket.getKey(result.itemIndex);
+        } finally {
+          releasePageFromRead(atomicOperation, cacheEntry);
+        }
+      } finally {
+        releaseSharedLock();
+      }
+    } catch (final IOException e) {
+      throw OException.wrapException(
+          new OStorageException("Error during finding last key in btree [" + getName() + "]"), e);
+    } finally {
+      atomicOperationsManager.releaseReadLock(this);
+    }
+  }
+
+  private Optional<BucketSearchResult> lastItem(final OAtomicOperation atomicOperation)
+      throws IOException {
+    final LinkedList<PagePathItemUnit> path = new LinkedList<>();
+
+    long bucketIndex = ROOT_INDEX;
+
+    OCacheEntry cacheEntry = loadPageForRead(atomicOperation, fileId, bucketIndex, false);
+
+    Bucket bucket = new Bucket(cacheEntry);
+
+    int itemIndex = bucket.size() - 1;
+    try {
+      while (true) {
+        if (!bucket.isLeaf()) {
+          if (itemIndex < -1) {
+            if (!path.isEmpty()) {
+              final PagePathItemUnit pagePathItemUnit = path.removeLast();
+
+              bucketIndex = pagePathItemUnit.pageIndex;
+              itemIndex = pagePathItemUnit.itemIndex - 1;
+            } else {
+              return Optional.empty();
+            }
+          } else {
+            //noinspection ObjectAllocationInLoop
+            path.add(new PagePathItemUnit(bucketIndex, itemIndex));
+
+            if (itemIndex > -1) {
+              bucketIndex = bucket.getRight(itemIndex);
+            } else {
+              bucketIndex = bucket.getLeft(0);
+            }
+
+            itemIndex = Bucket.MAX_PAGE_SIZE_BYTES + 1;
+          }
+        } else {
+          if (bucket.isEmpty()) {
+            if (!path.isEmpty()) {
+              final PagePathItemUnit pagePathItemUnit = path.removeLast();
+
+              bucketIndex = pagePathItemUnit.pageIndex;
+              itemIndex = pagePathItemUnit.itemIndex - 1;
+            } else {
+              return Optional.empty();
+            }
+          } else {
+            return Optional.of(new BucketSearchResult(bucket.size() - 1, bucketIndex));
+          }
+        }
+
+        releasePageFromRead(atomicOperation, cacheEntry);
+
+        cacheEntry = loadPageForRead(atomicOperation, fileId, bucketIndex, false);
+
+        //noinspection ObjectAllocationInLoop
+        bucket = new Bucket(cacheEntry);
+        if (itemIndex == Bucket.MAX_PAGE_SIZE_BYTES + 1) {
+          itemIndex = bucket.size() - 1;
+        }
+      }
+    } finally {
+      releasePageFromRead(atomicOperation, cacheEntry);
+    }
   }
 
   private UpdateBucketSearchResult splitBucket(
@@ -589,6 +773,42 @@ public final class BTreeBonsaiGlobal extends ODurableComponent {
         releasePageFromRead(atomicOperation, bucketEntry);
       }
     }
+  }
+
+  public int remove(final OAtomicOperation atomicOperation, final EdgeKey key) {
+    return calculateInsideComponentOperation(
+        atomicOperation,
+        operation -> {
+          acquireExclusiveLock();
+          try {
+            final int removedValue;
+            final BucketSearchResult bucketSearchResult = findBucket(key, atomicOperation);
+
+            if (bucketSearchResult.itemIndex < 0) {
+              return -1;
+            }
+
+            final byte[] serializedKey = EdgeKeySerializer.INSTANCE.serializeNativeAsWhole(key);
+            final OCacheEntry keyBucketCacheEntry =
+                loadPageForWrite(
+                    atomicOperation, fileId, bucketSearchResult.pageIndex, false, true);
+            final byte[] rawValue;
+            try {
+              final Bucket keyBucket = new Bucket(keyBucketCacheEntry);
+              rawValue = keyBucket.getRawValue(bucketSearchResult.itemIndex);
+              keyBucket.removeLeafEntry(
+                  bucketSearchResult.itemIndex, serializedKey.length, rawValue.length);
+              updateSize(-1, atomicOperation);
+            } finally {
+              releasePageFromWrite(atomicOperation, keyBucketCacheEntry);
+            }
+
+            removedValue = IntSerializer.INSTANCE.deserializeNativeObject(rawValue, 0);
+            return removedValue;
+          } finally {
+            releaseExclusiveLock();
+          }
+        });
   }
 
   static final class TreeEntry implements Comparable<TreeEntry> {
