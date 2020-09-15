@@ -2,11 +2,11 @@ package com.orientechnologies.orient.core.storage.index.sbtreebonsai.global.btre
 
 final class EdgeKey implements Comparable<EdgeKey> {
 
-  final long ownerId;
+  final int ownerId;
   final int targetCluster;
   final long targetPosition;
 
-  EdgeKey(long ownerId, int targetCluster, long targetPosition) {
+  EdgeKey(int ownerId, int targetCluster, long targetPosition) {
     this.ownerId = ownerId;
     this.targetCluster = targetCluster;
     this.targetPosition = targetPosition;
@@ -46,7 +46,7 @@ final class EdgeKey implements Comparable<EdgeKey> {
 
   @Override
   public int hashCode() {
-    int result = (int) (ownerId ^ (ownerId >>> 32));
+    int result = ownerId;
     result = 31 * result + targetCluster;
     result = 31 * result + (int) (targetPosition ^ (targetPosition >>> 32));
     return result;

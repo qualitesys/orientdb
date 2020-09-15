@@ -9,8 +9,6 @@ import com.orientechnologies.orient.core.db.OrientDB;
 import com.orientechnologies.orient.core.db.OrientDBConfig;
 import com.orientechnologies.orient.core.storage.impl.local.OAbstractPaginatedStorage;
 import com.orientechnologies.orient.core.storage.impl.local.paginated.atomicoperations.OAtomicOperationsManager;
-import com.orientechnologies.orient.core.storage.index.sbtreebonsai.global.btree.BTreeBonsaiGlobal;
-import com.orientechnologies.orient.core.storage.index.sbtreebonsai.global.btree.EdgeKey;
 import java.io.File;
 import java.util.Iterator;
 import java.util.Map;
@@ -145,7 +143,6 @@ public class BTreeBonsaiGlobalTestIT {
   public void testKeyPutRandomUniform() throws Exception {
     final NavigableSet<EdgeKey> keys = new TreeSet<>();
     final Random random = new Random();
-    final int keysCount = 1_000_000;
 
     while (keys.size() < keysCount) {
       atomicOperationsManager.executeInsideAtomicOperation(
@@ -174,7 +171,6 @@ public class BTreeBonsaiGlobalTestIT {
     System.out.println("testKeyPutRandomGaussian seed : " + seed);
 
     Random random = new Random(seed);
-    final int keysCount = 1_000_000;
 
     while (keys.size() < keysCount) {
       atomicOperationsManager.executeInsideAtomicOperation(
@@ -202,8 +198,6 @@ public class BTreeBonsaiGlobalTestIT {
 
   @Test
   public void testKeyDeleteRandomUniform() throws Exception {
-    final int keysCount = 10214 * 1024;
-
     NavigableSet<EdgeKey> keys = new TreeSet<>();
     for (int i = 0; i < keysCount; i++) {
       final EdgeKey key = new EdgeKey(42, i, i);
@@ -242,8 +236,6 @@ public class BTreeBonsaiGlobalTestIT {
 
   @Test
   public void testKeyDeleteRandomGaussian() throws Exception {
-    int keysCount = 1024 * 1024;
-
     NavigableSet<EdgeKey> keys = new TreeSet<>();
 
     long seed = System.currentTimeMillis();
