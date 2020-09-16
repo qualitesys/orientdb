@@ -33,6 +33,8 @@ import org.junit.runners.Parameterized;
 @RunWith(Parameterized.class)
 public class BTreeTestIT {
 
+  public static final String DB_NAME = "bTreeTest";
+  public static final String DIR_NAME = "/globalBTreeTest";
   private static OrientDB orientDB;
   private static BTree bTree;
   private static OAtomicOperationsManager atomicOperationsManager;
@@ -54,22 +56,22 @@ public class BTreeTestIT {
   public static void beforeClass() {
     buildDirectory = System.getProperty("buildDirectory");
     if (buildDirectory == null) {
-      buildDirectory = "./target/globalSBTreeBonsaiTest";
+      buildDirectory = "./target" + DIR_NAME;
     } else {
-      buildDirectory += "/globalSBTreeBonsaiTest";
+      buildDirectory += DIR_NAME;
     }
 
     OFileUtils.deleteRecursively(new File(buildDirectory));
 
     orientDB = new OrientDB("plocal:" + buildDirectory, OrientDBConfig.defaultConfig());
 
-    if (orientDB.exists("bonsaiTest")) {
-      orientDB.drop("bonsaiTest");
+    if (orientDB.exists(DB_NAME)) {
+      orientDB.drop(DB_NAME);
     }
 
-    orientDB.create("bonsaiTest", ODatabaseType.PLOCAL);
+    orientDB.create(DB_NAME, ODatabaseType.PLOCAL);
 
-    ODatabaseSession databaseSession = orientDB.open("bonsaiTest", "admin", "admin");
+    ODatabaseSession databaseSession = orientDB.open(DB_NAME, "admin", "admin");
     storage = (OAbstractPaginatedStorage) ((ODatabaseInternal<?>) databaseSession).getStorage();
     atomicOperationsManager = storage.getAtomicOperationsManager();
     databaseSession.close();
@@ -77,7 +79,7 @@ public class BTreeTestIT {
 
   @AfterClass
   public static void afterClass() {
-    orientDB.drop("bonsaiTest");
+    orientDB.drop(DB_NAME);
     orientDB.close();
 
     OFileUtils.deleteRecursively(new File(buildDirectory));
@@ -86,7 +88,7 @@ public class BTreeTestIT {
   @Before
   public void beforeMethod() throws Exception {
 
-    bTree = new BTree(storage, "bonsaiGlobal", ".sbc");
+    bTree = new BTree(storage, "bTree", ".sbc");
     atomicOperationsManager.executeInsideAtomicOperation(
         (atomicOperation) -> bTree.create(atomicOperation));
   }
@@ -615,8 +617,7 @@ public class BTreeTestIT {
 
       final Iterator<ORawPair<EdgeKey, Integer>> indexIterator;
       try (Stream<ORawPair<EdgeKey, Integer>> stream =
-          bTree.iterateEntriesBetween(
-              fromKey, fromInclusive, toKey, toInclusive, ascSortOrder)) {
+          bTree.iterateEntriesBetween(fromKey, fromInclusive, toKey, toInclusive, ascSortOrder)) {
         indexIterator = stream.iterator();
 
         Iterator<Map.Entry<EdgeKey, Integer>> iterator;

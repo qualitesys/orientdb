@@ -13,9 +13,8 @@ public final class SizeMap extends ODurableComponent {
 
   private long fileId;
 
-  public SizeMap(
-      OAbstractPaginatedStorage storage, String name, String extension, String lockName) {
-    super(storage, name, extension, lockName);
+  public SizeMap(OAbstractPaginatedStorage storage, String name, String extension) {
+    super(storage, name, extension, name + extension);
   }
 
   public void create(final OAtomicOperation atomicOperation) {
