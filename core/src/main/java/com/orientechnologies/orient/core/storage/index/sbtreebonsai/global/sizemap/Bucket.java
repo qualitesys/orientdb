@@ -24,20 +24,51 @@ public class Bucket extends ODurablePage {
     setIntValue(SIZE_OFFSET, 0);
   }
 
-  public int addEntry() {
+  public int addEntry(final int entryIndex) {
+    final int index;
+    final int entryPosition;
+
     final int currentSize = getIntValue(SIZE_OFFSET);
-    if (currentSize >= MAX_BUCKET_SIZE) {
-      return -1;
+    if (entryIndex < 0) {
+
+      if (currentSize >= MAX_BUCKET_SIZE) {
+        return -1;
+      }
+
+      setIntValue(SIZE_OFFSET, currentSize + 1);
+      index = currentSize + 1;
+      entryPosition = ENTRIES_OFFSET + index * ENTRY_SIZE;
+    } else {
+      if (entryIndex >= currentSize) {
+        throw new OStorageException(
+            "Bucket is filled up to " + currentSize + " but requested index is " + entryIndex);
+      }
+
+      index = entryIndex;
+      entryPosition = ENTRIES_OFFSET + index * ENTRY_SIZE;
+
+      if (getIntValue(entryPosition) >= 0) {
+        throw new OStorageException(
+            "RidBag for the bucket with index "
+                + getPageIndex()
+                + " and local index "
+                + entryIndex
+                + " is not deleted and can not be reused");
+      }
     }
 
-    setIntValue(SIZE_OFFSET, currentSize + 1);
-    final int entryPosition = ENTRIES_OFFSET + (currentSize + 1) * ENTRY_SIZE;
     setIntValue(entryPosition, 0);
 
-    return currentSize + 1;
+    return index;
   }
 
   public void incrementSize(int ridBagId) {
+    final int bucketSize = getIntValue(SIZE_OFFSET);
+    if (ridBagId >= bucketSize) {
+      throw new OStorageException(
+          "Bucket is filled up to " + bucketSize + " but requested index is " + bucketSize);
+    }
+
     final int entryPosition = ENTRIES_OFFSET + ridBagId * ENTRY_SIZE;
     final int currentSize = getIntValue(entryPosition);
     if (currentSize < 0) {
@@ -48,6 +79,12 @@ public class Bucket extends ODurablePage {
   }
 
   public void decrementSize(int ridBagId) {
+    final int bucketSize = getIntValue(SIZE_OFFSET);
+    if (ridBagId >= bucketSize) {
+      throw new OStorageException(
+          "Bucket is filled up to " + bucketSize + " but requested index is " + bucketSize);
+    }
+
     final int entryPosition = ENTRIES_OFFSET + ridBagId * ENTRY_SIZE;
     final int currentSize = getIntValue(entryPosition);
     if (currentSize < 0) {
@@ -62,6 +99,12 @@ public class Bucket extends ODurablePage {
   }
 
   public int getSize(int ridBagId) {
+    final int bucketSize = getIntValue(SIZE_OFFSET);
+    if (ridBagId >= bucketSize) {
+      throw new OStorageException(
+          "Bucket is filled up to " + bucketSize + " but requested index is " + bucketSize);
+    }
+
     final int entryPosition = ENTRIES_OFFSET + ridBagId * ENTRY_SIZE;
     final int currentSize = getIntValue(entryPosition);
     if (currentSize < 0) {
@@ -71,13 +114,40 @@ public class Bucket extends ODurablePage {
     return currentSize;
   }
 
-  public void delete(int ridBagId) {
+  public void delete(int ridBagId, int freeListHeader) {
+    final int bucketSize = getIntValue(SIZE_OFFSET);
+    if (ridBagId >= bucketSize) {
+      throw new OStorageException(
+          "Bucket is filled up to " + bucketSize + " but requested index is " + bucketSize);
+    }
+
     final int entryPosition = ENTRIES_OFFSET + ridBagId * ENTRY_SIZE;
     final int currentSize = getIntValue(entryPosition);
     if (currentSize < 0) {
       throw new OStorageException("RidBag is already deleted and can not be used");
     }
 
-    setIntValue(entryPosition, -1);
+    setIntValue(entryPosition, -1 - freeListHeader);
+  }
+
+  public int getNextFreeListItem(int ridBagId) {
+    final int bucketSize = getIntValue(SIZE_OFFSET);
+    if (ridBagId >= bucketSize) {
+      throw new OStorageException(
+          "Bucket is filled up to " + bucketSize + " but requested index is " + bucketSize);
+    }
+
+    final int entryPosition = ENTRIES_OFFSET + ridBagId * ENTRY_SIZE;
+    final int listHeader = getIntValue(entryPosition);
+
+    if (listHeader >= 0) {
+      throw new OStorageException(
+          "Bucket with index "
+              + getPageIndex()
+              + " does not contain pointer on next item of free list, instead it contains ridbag with id "
+              + ridBagId);
+    }
+
+    return -listHeader - 1;
   }
 }

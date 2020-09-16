@@ -74,12 +74,15 @@ public final class SizeMap extends ODurableComponent {
         operation -> {
           acquireExclusiveLock();
           try {
+            int freeListHeader;
             int fileSize;
             {
               final OCacheEntry cacheEntry = loadPageForRead(atomicOperation, fileId, 0, false);
               try {
                 final EntryPoint entryPoint = new EntryPoint(cacheEntry);
                 fileSize = entryPoint.getFileSize();
+
+                freeListHeader = entryPoint.getFreeListHeader();
               } finally {
                 releasePageFromRead(atomicOperation, cacheEntry);
               }
@@ -87,14 +90,13 @@ public final class SizeMap extends ODurableComponent {
 
             if (fileSize == 0) {
               // add new page and entry
-
               final int localRidBagId;
               final OCacheEntry newEntry = addPage(atomicOperation, fileId);
               try {
                 final Bucket bucket = new Bucket(newEntry);
                 bucket.init();
 
-                localRidBagId = bucket.addEntry();
+                localRidBagId = bucket.addEntry(-1);
                 assert localRidBagId >= 0;
 
               } finally {
@@ -116,12 +118,15 @@ public final class SizeMap extends ODurableComponent {
               // 2. try to add and if it is failed add new page and repeat
 
               int localRidBagId;
+              int entryIndex = -1;
+
               OCacheEntry cacheEntry =
                   loadPageForWrite(atomicOperation, fileId, fileSize, false, true);
               while (true) {
                 try {
                   final Bucket bucket = new Bucket(cacheEntry);
-                  localRidBagId = bucket.addEntry();
+                  localRidBagId = bucket.addEntry(entryIndex);
+
                   if (localRidBagId >= 0) {
                     break;
                   }
@@ -129,16 +134,39 @@ public final class SizeMap extends ODurableComponent {
                   releasePageFromWrite(atomicOperation, cacheEntry);
                 }
 
-                cacheEntry = addPage(atomicOperation, fileId);
+                if (freeListHeader == -1) {
+                  cacheEntry = addPage(atomicOperation, fileId);
 
-                final OCacheEntry stateEntry =
-                    loadPageForWrite(atomicOperation, fileId, 0, false, true);
-                try {
-                  final EntryPoint entryPoint = new EntryPoint(stateEntry);
-                  entryPoint.setFileSize(fileSize + 1);
-                  fileSize++;
-                } finally {
-                  releasePageFromWrite(atomicOperation, stateEntry);
+                  final OCacheEntry stateEntry =
+                      loadPageForWrite(atomicOperation, fileId, 0, false, true);
+                  try {
+                    final EntryPoint entryPoint = new EntryPoint(stateEntry);
+                    entryPoint.setFileSize(fileSize + 1);
+                    fileSize++;
+                  } finally {
+                    releasePageFromWrite(atomicOperation, stateEntry);
+                  }
+                } else {
+                  final int freeListPageIndex = freeListHeader / Bucket.MAX_BUCKET_SIZE;
+                  final int freeListLocalIndex =
+                      freeListHeader - freeListPageIndex * Bucket.MAX_BUCKET_SIZE;
+
+                  cacheEntry =
+                      loadPageForWrite(atomicOperation, fileId, freeListHeader, false, true);
+
+                  final Bucket bucket = new Bucket(cacheEntry);
+                  freeListHeader = bucket.getNextFreeListItem(freeListLocalIndex);
+
+                  final OCacheEntry stateEntry =
+                      loadPageForWrite(atomicOperation, fileId, 0, false, true);
+                  try {
+                    final EntryPoint entryPoint = new EntryPoint(stateEntry);
+                    entryPoint.setFreeListHeader(freeListHeader);
+                  } finally {
+                    releasePageFromWrite(atomicOperation, stateEntry);
+                  }
+
+                  entryIndex = freeListLocalIndex;
                 }
               }
 
@@ -224,6 +252,17 @@ public final class SizeMap extends ODurableComponent {
         operation -> {
           acquireExclusiveLock();
           try {
+            final int freeListHeader;
+            final OCacheEntry stateEntry =
+                loadPageForWrite(atomicOperation, fileId, 0, false, true);
+            try {
+              final EntryPoint entryPoint = new EntryPoint(stateEntry);
+              freeListHeader = entryPoint.getFreeListHeader();
+              entryPoint.setFreeListHeader(ridBagId);
+            } finally {
+              releasePageFromWrite(atomicOperation, stateEntry);
+            }
+
             final int pageIndex = ridBagId / Bucket.MAX_BUCKET_SIZE;
             final int localRidBagId = pageIndex - ridBagId * Bucket.MAX_BUCKET_SIZE;
 
@@ -231,7 +270,7 @@ public final class SizeMap extends ODurableComponent {
                 loadPageForWrite(atomicOperation, fileId, pageIndex, false, true);
             try {
               final Bucket bucket = new Bucket(cacheEntry);
-              bucket.delete(localRidBagId);
+              bucket.delete(localRidBagId, freeListHeader);
             } finally {
               releasePageFromWrite(atomicOperation, cacheEntry);
             }
