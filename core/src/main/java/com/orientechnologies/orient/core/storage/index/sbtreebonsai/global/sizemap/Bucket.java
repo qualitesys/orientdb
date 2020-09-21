@@ -11,10 +11,11 @@ public class Bucket extends ODurablePage {
   private static final int ENTRY_SIZE = Integer.SIZE / 8;
   private static final int PAGE_SIZE =
       OGlobalConfiguration.DISK_CACHE_PAGE_SIZE.getValueAsInteger() * 1024;
-  public static final int MAX_BUCKET_SIZE = PAGE_SIZE / ENTRY_SIZE;
 
   private static final int SIZE_OFFSET = NEXT_FREE_POSITION;
   private static final int ENTRIES_OFFSET = SIZE_OFFSET + OIntegerSerializer.INT_SIZE;
+
+  public static final int MAX_BUCKET_SIZE = (PAGE_SIZE - ENTRIES_OFFSET) / ENTRY_SIZE;
 
   public Bucket(OCacheEntry cacheEntry) {
     super(cacheEntry);
@@ -36,7 +37,7 @@ public class Bucket extends ODurablePage {
       }
 
       setIntValue(SIZE_OFFSET, currentSize + 1);
-      index = currentSize + 1;
+      index = currentSize;
       entryPosition = ENTRIES_OFFSET + index * ENTRY_SIZE;
     } else {
       if (entryIndex >= currentSize) {
@@ -58,7 +59,6 @@ public class Bucket extends ODurablePage {
     }
 
     setIntValue(entryPosition, 0);
-
     return index;
   }
 
@@ -127,7 +127,7 @@ public class Bucket extends ODurablePage {
       throw new OStorageException("RidBag is already deleted and can not be used");
     }
 
-    setIntValue(entryPosition, -1 - freeListHeader);
+    setIntValue(entryPosition, -2 - freeListHeader);
   }
 
   public int getNextFreeListItem(int ridBagId) {
@@ -148,6 +148,6 @@ public class Bucket extends ODurablePage {
               + ridBagId);
     }
 
-    return -listHeader - 1;
+    return -listHeader - 2;
   }
 }
