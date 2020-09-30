@@ -1049,7 +1049,7 @@ public final class BTree extends ODurableComponent {
       OCacheEntry cacheEntry = loadPageForRead(atomicOperation, fileId, pageIndex, false);
       try {
         Bucket bucket = new Bucket(cacheEntry);
-        if (lastLSN == null || bucket.getLSN().equals(lastLSN)) {
+        if (lastLSN == null || (bucket.getLSN().equals(lastLSN) && atomicOperation == null)) {
           while (true) {
             int bucketSize = bucket.size();
             if (itemIndex >= bucketSize) {
@@ -1251,7 +1251,7 @@ public final class BTree extends ODurableComponent {
       OCacheEntry cacheEntry = loadPageForRead(atomicOperation, fileId, pageIndex, false);
       try {
         Bucket bucket = new Bucket(cacheEntry);
-        if (lastLSN == null || bucket.getLSN().equals(lastLSN)) {
+        if (lastLSN == null || (bucket.getLSN().equals(lastLSN) && atomicOperation == null)) {
           while (true) {
             if (itemIndex < 0) {
               pageIndex = (int) bucket.getLeftSibling();

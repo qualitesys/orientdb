@@ -11,12 +11,14 @@ import com.orientechnologies.orient.core.record.impl.ODocument;
 import com.orientechnologies.orient.core.storage.index.sbtreebonsai.local.OSBTreeBonsai;
 import com.orientechnologies.orient.core.storage.ridbag.sbtree.OBonsaiCollectionPointer;
 import com.orientechnologies.orient.core.storage.ridbag.sbtree.OSBTreeCollectionManagerShared;
+import java.util.Collections;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Ignore;
 import org.junit.Test;
 
 import static com.orientechnologies.orient.core.config.OGlobalConfiguration.RID_BAG_SBTREEBONSAI_DELETE_DALAY;
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 
 /**
@@ -42,7 +44,7 @@ public class SBTreeBagDeleteTest {
   }
 
   @Test
-  public void testDeleteRidbagTx() throws InterruptedException {
+  public void testDeleteRidbagTx() {
 
     ODocument doc = new ODocument();
     ORidBag bag = new ORidBag();
@@ -63,13 +65,12 @@ public class SBTreeBagDeleteTest {
     doc = db.load(id);
     assertNull(doc);
 
-    Thread.sleep(100);
     OSBTreeBonsai<OIdentifiable, Integer> tree = db.getSbTreeCollectionManager().loadSBTree(pointer);
-    assertNull(tree);
+    assertEquals(0, tree.getRealBagSize(Collections.emptyMap()));
   }
 
   @Test
-  public void testDeleteRidbagNoTx() throws InterruptedException {
+  public void testDeleteRidbagNoTx() {
     ODocument doc = new ODocument();
     ORidBag bag = new ORidBag();
     int size = OGlobalConfiguration.INDEX_EMBEDDED_TO_SBTREEBONSAI_THRESHOLD.getValueAsInteger() * 2;
@@ -87,9 +88,8 @@ public class SBTreeBagDeleteTest {
     doc = db.load(id);
     assertNull(doc);
 
-    Thread.sleep(100);
     OSBTreeBonsai<OIdentifiable, Integer> tree = db.getSbTreeCollectionManager().loadSBTree(pointer);
-    assertNull(tree);
+    assertEquals(0, tree.getRealBagSize(Collections.emptyMap()));
   }
 
 }
