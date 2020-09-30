@@ -6,6 +6,7 @@ import com.orientechnologies.orient.core.id.ORecordId;
 import com.orientechnologies.orient.core.storage.impl.local.OAbstractPaginatedStorage;
 import com.orientechnologies.orient.core.storage.impl.local.paginated.atomicoperations.OAtomicOperation;
 import com.orientechnologies.orient.core.storage.impl.local.paginated.atomicoperations.OAtomicOperationsManager;
+import com.orientechnologies.orient.core.storage.index.sbtreebonsai.global.BTreeBonsaiGlobal;
 import com.orientechnologies.orient.core.storage.index.sbtreebonsai.local.OSBTreeBonsaiLocal;
 import com.orientechnologies.orient.core.storage.ridbag.sbtree.OBonsaiCollectionPointer;
 import com.orientechnologies.orient.core.storage.ridbag.sbtree.OSBTreeCollectionManager;
@@ -28,11 +29,10 @@ public class ConcurrencySBTreeBonsaiLocalTest {
       final OAtomicOperationsManager atomManager = ((OAbstractPaginatedStorage) db.getStorage()).getAtomicOperationsManager();
       final OAtomicOperation atomicOperation = atomManager.startAtomicOperation();
       OBonsaiCollectionPointer treePointer = coll.createSBTree(atomicOperation, 3, null);
-      OSBTreeBonsaiLocal<OIdentifiable, Integer> tree = (OSBTreeBonsaiLocal<OIdentifiable, Integer>) coll.loadSBTree(treePointer);
+      BTreeBonsaiGlobal tree = (BTreeBonsaiGlobal) coll.loadSBTree(treePointer);
 
       OBonsaiCollectionPointer treePointer1 = coll.createSBTree(atomicOperation, 3, null);
-      final OSBTreeBonsaiLocal<OIdentifiable, Integer> tree1 = (OSBTreeBonsaiLocal<OIdentifiable, Integer>) coll
-          .loadSBTree(treePointer1);
+      final BTreeBonsaiGlobal tree1 = (BTreeBonsaiGlobal) coll.loadSBTree(treePointer1);
       for (int i = 1000; i < 2000; i++)
         tree.put(atomicOperation, new ORecordId(10, i), 1);
       Future<?> ex = null;
@@ -60,19 +60,19 @@ public class ConcurrencySBTreeBonsaiLocalTest {
       OSBTreeRidBag bag = new OSBTreeRidBag();
       bag.setCollectionPointer(tree.getCollectionPointer());
       bag.setAutoConvertToRecord(false);
-      Assert.assertEquals(tree.size(), 1000);
       for (OIdentifiable id : bag) {
-        if (id.getIdentity().getClusterPosition() > 2000)
+        if (id.getIdentity().getClusterPosition() > 2000) {
           Assert.fail("found a wrong rid in the ridbag");
+        }
       }
       OSBTreeRidBag secondBag = new OSBTreeRidBag();
       secondBag.setAutoConvertToRecord(false);
       secondBag.setCollectionPointer(tree1.getCollectionPointer());
-      Assert.assertEquals(tree1.size(), 1000);
-      for (OIdentifiable id : secondBag) {
 
-        if (id.getIdentity().getClusterPosition() < 2000)
+      for (OIdentifiable id : secondBag) {
+        if (id.getIdentity().getClusterPosition() < 2000) {
           Assert.fail("found a wrong rid in the ridbag");
+        }
       }
 
     } finally {

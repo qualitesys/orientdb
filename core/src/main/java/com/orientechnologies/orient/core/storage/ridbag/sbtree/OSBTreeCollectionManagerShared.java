@@ -32,6 +32,7 @@ import com.orientechnologies.orient.core.db.record.ridbag.ORidBag;
 import com.orientechnologies.orient.core.exception.OAccessToSBtreeCollectionManagerIsProhibitedException;
 import com.orientechnologies.orient.core.exception.OStorageException;
 import com.orientechnologies.orient.core.serialization.serializer.binary.impl.OLinkSerializer;
+import com.orientechnologies.orient.core.storage.cache.OWriteCache;
 import com.orientechnologies.orient.core.storage.cache.local.OWOWCache;
 import com.orientechnologies.orient.core.storage.impl.local.OAbstractPaginatedStorage;
 import com.orientechnologies.orient.core.storage.impl.local.paginated.atomicoperations.OAtomicOperation;
@@ -49,7 +50,7 @@ import java.util.stream.Stream;
 /** @author Artem Orobets (enisher-at-gmail.com) */
 public final class OSBTreeCollectionManagerShared
     implements OSBTreeCollectionManager, OOrientStartupListener, OOrientShutdownListener {
-  public static final String DEFAULT_EXTENSION = ".grb";
+  public static final String FILE_EXTENSION = ".grb";
   public static final String FILE_NAME_PREFIX = "global_collection_";
 
   /**
@@ -74,8 +75,8 @@ public final class OSBTreeCollectionManagerShared
    */
   private volatile boolean prohibitAccess = false;
 
+  private volatile OWriteCache writeCache;
   private final ConcurrentHashMap<Integer, BTree> fileIdBTreeMap = new ConcurrentHashMap<>();
-  private final ConcurrentHashMap<Integer, Integer> clusterIdFileIdMap = new ConcurrentHashMap<>();
 
   private final AtomicLong ridBagIdCounter = new AtomicLong();
 
@@ -83,7 +84,28 @@ public final class OSBTreeCollectionManagerShared
     this.storage = storage;
   }
 
+  public void load() {
+    this.writeCache = storage.getWriteCache();
 
+    for (final Map.Entry<String, Long> entry : writeCache.files().entrySet()) {
+      final String fileName = entry.getKey();
+      if (fileName.endsWith(FILE_EXTENSION) && fileName.startsWith(FILE_NAME_PREFIX)) {
+        final BTree bTree =
+            new BTree(
+                storage,
+                fileName.substring(0, fileName.length() - FILE_EXTENSION.length()),
+                FILE_EXTENSION);
+        bTree.load();
+
+        fileIdBTreeMap.put(OWOWCache.extractFileId(entry.getValue()), bTree);
+        final EdgeKey edgeKey = bTree.lastKey();
+
+        if (edgeKey != null && ridBagIdCounter.get() < edgeKey.ridBagId) {
+          ridBagIdCounter.set(edgeKey.ridBagId);
+        }
+      }
+    }
+  }
 
   /**
    * Once this method is called any attempt to load/create/delete b-tree will be resulted in
@@ -108,27 +130,43 @@ public final class OSBTreeCollectionManagerShared
   }
 
   private BTreeBonsaiGlobal doCreateRidBag(OAtomicOperation atomicOperation, int clusterId) {
-    final BTree[] bTree = new BTree[1];
-    final int fileId =
-        clusterIdFileIdMap.compute(
-            clusterId,
-            (key, value) -> {
-              if (value != null) {
-                throw new OStorageException(
-                    "RidBag for cluster id " + clusterId + " already exists");
-              }
+    long fileId = atomicOperation.fileIdByName(generateLockName(clusterId));
 
-              bTree[0] = new BTree(storage, FILE_NAME_PREFIX + clusterId, DEFAULT_EXTENSION);
-              bTree[0].create(atomicOperation);
+    // lock is already acquired on storage level, so we are thread safe here.
+    if (fileId < 0) {
+      final BTree bTree = new BTree(storage, FILE_NAME_PREFIX + clusterId, FILE_EXTENSION);
+      bTree.create(atomicOperation);
 
-              final int intFileId = OWOWCache.extractFileId(bTree[0].getFileId());
-              fileIdBTreeMap.put(intFileId, bTree[0]);
+      fileId = bTree.getFileId();
+      final long nextRidBagId = generateNextRidBagId(bTree);
 
-              return intFileId;
-            });
+      final int intFileId = OWOWCache.extractFileId(fileId);
+      fileIdBTreeMap.put(intFileId, bTree);
 
+      return new BTreeBonsaiGlobal(
+          bTree,
+          intFileId,
+          clusterId,
+          nextRidBagId,
+          OLinkSerializer.INSTANCE,
+          OIntegerSerializer.INSTANCE);
+    } else {
+      final int intFileId = OWOWCache.extractFileId(fileId);
+      final BTree bTree = fileIdBTreeMap.get(intFileId);
+      final long nextRidBagId = generateNextRidBagId(bTree);
+
+      return new BTreeBonsaiGlobal(
+          bTree,
+          intFileId,
+          clusterId,
+          nextRidBagId,
+          OLinkSerializer.INSTANCE,
+          OIntegerSerializer.INSTANCE);
+    }
+  }
+
+  private long generateNextRidBagId(BTree bTree) {
     long nextRidBagId;
-
     while (true) {
       nextRidBagId = ridBagIdCounter.incrementAndGet();
 
@@ -138,7 +176,7 @@ public final class OSBTreeCollectionManagerShared
       }
 
       try (final Stream<ORawPair<EdgeKey, Integer>> stream =
-          bTree[0].iterateEntriesBetween(
+          bTree.iterateEntriesBetween(
               new EdgeKey(nextRidBagId, Integer.MIN_VALUE, Long.MIN_VALUE),
               true,
               new EdgeKey(nextRidBagId, Integer.MAX_VALUE, Long.MAX_VALUE),
@@ -149,25 +187,19 @@ public final class OSBTreeCollectionManagerShared
         }
       }
     }
-
-    return new BTreeBonsaiGlobal(
-        bTree[0],
-        fileId,
-        clusterId,
-        nextRidBagId,
-        OLinkSerializer.INSTANCE,
-        OIntegerSerializer.INSTANCE);
+    return nextRidBagId;
   }
 
   @Override
   public OSBTreeBonsai<OIdentifiable, Integer> loadSBTree(
       OBonsaiCollectionPointer collectionPointer) {
-    final int fileId = (int) collectionPointer.getFileId();
-    final BTree bTree = fileIdBTreeMap.get(fileId);
+    final int intFileId = (int) collectionPointer.getFileId();
+
+    final BTree bTree = fileIdBTreeMap.get(intFileId);
 
     return new BTreeBonsaiGlobal(
         bTree,
-        fileId,
+        intFileId,
         collectionPointer.getRootPointer().getPageOffset(),
         collectionPointer.getRootPointer().getPageIndex(),
         OLinkSerializer.INSTANCE,
@@ -239,7 +271,6 @@ public final class OSBTreeCollectionManagerShared
 
   public void close() {
     fileIdBTreeMap.clear();
-    clusterIdFileIdMap.clear();
   }
 
   public boolean delete(
@@ -264,5 +295,15 @@ public final class OSBTreeCollectionManagerShared
     }
 
     return true;
+  }
+
+  /**
+   * Generates a lock name for the given cluster ID.
+   *
+   * @param clusterId the cluster ID to generate the lock name for.
+   * @return the generated lock name.
+   */
+  public static String generateLockName(int clusterId) {
+    return FILE_NAME_PREFIX + clusterId + FILE_EXTENSION;
   }
 }

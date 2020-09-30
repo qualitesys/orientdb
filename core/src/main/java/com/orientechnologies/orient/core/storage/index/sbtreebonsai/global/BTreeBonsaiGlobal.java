@@ -308,6 +308,11 @@ public class BTreeBonsaiGlobal implements OSBTreeBonsai<OIdentifiable, Integer> 
           });
     }
 
+    for (final Change change : notAppliedChanges.values()) {
+      final int result = change.applyTo(0);
+      size.increment(result);
+    }
+
     return size.value;
   }
 

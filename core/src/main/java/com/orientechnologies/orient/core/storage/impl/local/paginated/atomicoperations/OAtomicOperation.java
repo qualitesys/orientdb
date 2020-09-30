@@ -385,6 +385,19 @@ public final class OAtomicOperation {
     return writeCache.fileNameById(fileId);
   }
 
+  public long fileIdByName(final String fileName) {
+    Long fileId = newFileNamesId.get(fileName);
+    if (fileId != null) {
+      return fileId;
+    }
+
+    if (deletedFileNameIdMap.containsKey(fileName)) {
+      return -1;
+    }
+
+    return writeCache.fileIdByName(fileName);
+  }
+
   public void truncateFile(long fileId) {
     fileId = checkFileIdCompatibility(fileId, storageId);
 

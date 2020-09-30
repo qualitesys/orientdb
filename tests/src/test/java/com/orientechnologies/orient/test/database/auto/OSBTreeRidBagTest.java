@@ -143,19 +143,19 @@ public class OSBTreeRidBagTest extends ORidBagTest {
     final OWOWCache wowCache = (OWOWCache) ((OLocalPaginatedStorage) (database.getStorage())).getWriteCache();
 
     final File ridBagOneFile = new File(directory, wowCache.nativeFileNameById(wowCache.fileIdByName(
-        OSBTreeCollectionManagerShared.FILE_NAME_PREFIX + clusterIdOne + OSBTreeCollectionManagerShared.DEFAULT_EXTENSION)));
+        OSBTreeCollectionManagerShared.FILE_NAME_PREFIX + clusterIdOne + OSBTreeCollectionManagerShared.FILE_EXTENSION)));
     Assert.assertTrue(ridBagOneFile.exists());
 
     final File ridBagTwoFile = new File(directory, wowCache.nativeFileNameById(wowCache.fileIdByName(
-        OSBTreeCollectionManagerShared.FILE_NAME_PREFIX + clusterIdTwo + OSBTreeCollectionManagerShared.DEFAULT_EXTENSION)));
+        OSBTreeCollectionManagerShared.FILE_NAME_PREFIX + clusterIdTwo + OSBTreeCollectionManagerShared.FILE_EXTENSION)));
     Assert.assertTrue(ridBagTwoFile.exists());
 
     final File ridBagThreeFile = new File(directory, wowCache.nativeFileNameById(wowCache.fileIdByName(
-        OSBTreeCollectionManagerShared.FILE_NAME_PREFIX + clusterIdThree + OSBTreeCollectionManagerShared.DEFAULT_EXTENSION)));
+        OSBTreeCollectionManagerShared.FILE_NAME_PREFIX + clusterIdThree + OSBTreeCollectionManagerShared.FILE_EXTENSION)));
     Assert.assertTrue(ridBagThreeFile.exists());
 
     final File ridBagFourFile = new File(directory, wowCache.nativeFileNameById(wowCache.fileIdByName(
-        OSBTreeCollectionManagerShared.FILE_NAME_PREFIX + clusterIdFour + OSBTreeCollectionManagerShared.DEFAULT_EXTENSION)));
+        OSBTreeCollectionManagerShared.FILE_NAME_PREFIX + clusterIdFour + OSBTreeCollectionManagerShared.FILE_EXTENSION)));
     Assert.assertTrue(ridBagFourFile.exists());
   }
 
@@ -276,7 +276,7 @@ public class OSBTreeRidBagTest extends ORidBagTest {
     final String directory = database.getStorage().getConfiguration().getDirectory();
 
     File testRidBagFile = new File(directory,
-        OSBTreeCollectionManagerShared.FILE_NAME_PREFIX + clusterId + OSBTreeCollectionManagerShared.DEFAULT_EXTENSION);
+        OSBTreeCollectionManagerShared.FILE_NAME_PREFIX + clusterId + OSBTreeCollectionManagerShared.FILE_EXTENSION);
     long testRidBagSize = testRidBagFile.length();
 
     for (int i = 0; i < 100; i++) {
@@ -291,7 +291,7 @@ public class OSBTreeRidBagTest extends ORidBagTest {
 
     OGlobalConfiguration.SBTREEBOSAI_FREE_SPACE_REUSE_TRIGGER.setValue(reuseTrigger);
     testRidBagFile = new File(directory,
-        OSBTreeCollectionManagerShared.FILE_NAME_PREFIX + clusterId + OSBTreeCollectionManagerShared.DEFAULT_EXTENSION);
+        OSBTreeCollectionManagerShared.FILE_NAME_PREFIX + clusterId + OSBTreeCollectionManagerShared.FILE_EXTENSION);
 
     Assert.assertEquals(testRidBagFile.length(), testRidBagSize);
 

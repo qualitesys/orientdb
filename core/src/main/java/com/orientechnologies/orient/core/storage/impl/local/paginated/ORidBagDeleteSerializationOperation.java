@@ -34,6 +34,6 @@ public class ORidBagDeleteSerializationOperation implements ORecordSerialization
   @Override
   public void execute(
       final OAtomicOperation atomicOperation, OAbstractPaginatedStorage paginatedStorage) {
-    paginatedStorage.tryToDeleteTreeRidBag(ridBag);
+    paginatedStorage.deleteTreeRidBag(ridBag);
   }
 }

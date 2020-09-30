@@ -165,7 +165,6 @@ import com.orientechnologies.orient.core.storage.index.engine.OSBTreeIndexEngine
 import com.orientechnologies.orient.core.storage.ridbag.sbtree.OBonsaiCollectionPointer;
 import com.orientechnologies.orient.core.storage.ridbag.sbtree.OIndexRIDContainerSBTree;
 import com.orientechnologies.orient.core.storage.ridbag.sbtree.OSBTreeCollectionManager;
-import com.orientechnologies.orient.core.storage.ridbag.sbtree.OSBTreeCollectionManagerAbstract;
 import com.orientechnologies.orient.core.storage.ridbag.sbtree.OSBTreeCollectionManagerShared;
 import com.orientechnologies.orient.core.storage.ridbag.sbtree.OSBTreeRidBag;
 import com.orientechnologies.orient.core.tx.OTransactionAbstract;
@@ -406,6 +405,8 @@ public abstract class OAbstractPaginatedStorage extends OStorageAbstract
             idGen.getLastId() + 1);
         atomicOperationsManager = new OAtomicOperationsManager(this, atomicOperationsTable);
         recoverIfNeeded();
+
+        sbTreeCollectionManager.load();
 
         atomicOperationsManager.executeInsideAtomicOperation((atomicOperation) -> {
           if (OClusterBasedStorageConfiguration.exists(writeCache)) {
@@ -653,6 +654,7 @@ public abstract class OAbstractPaginatedStorage extends OStorageAbstract
             idGen.getLastId() + 1);
         atomicOperationsManager = new OAtomicOperationsManager(this, atomicOperationsTable);
         transaction = new ThreadLocal<>();
+        sbTreeCollectionManager.load();
 
         preCreateSteps();
         makeStorageDirty();
@@ -4834,7 +4836,7 @@ public abstract class OAbstractPaginatedStorage extends OStorageAbstract
     }
   }
 
-  public void tryToDeleteTreeRidBag(final OSBTreeRidBag ridBag) {
+  public void deleteTreeRidBag(final OSBTreeRidBag ridBag) {
     try {
       checkOpenness();
       checkLowDiskSpaceRequestsAndReadOnlyConditions();
@@ -4845,12 +4847,13 @@ public abstract class OAbstractPaginatedStorage extends OStorageAbstract
           checkOpenness();
           checkIfThreadIsBlocked();
 
-          deleteTreeRidBag(ridBag);
+          atomicOperationsManager.executeInsideAtomicOperation(
+              atomicOperation -> deleteTreeRidBag(ridBag, atomicOperation));
         } finally {
           stateLock.releaseWriteLock();
         }
       } else {
-        deleteTreeRidBag(ridBag);
+        deleteTreeRidBag(ridBag, OAtomicOperationsManager.getCurrentOperation());
       }
     } catch (final RuntimeException ee) {
       throw logAndPrepareForRethrow(ee);
@@ -4861,23 +4864,17 @@ public abstract class OAbstractPaginatedStorage extends OStorageAbstract
     }
   }
 
-  private void deleteTreeRidBag(OSBTreeRidBag ridBag) {
+  private void deleteTreeRidBag(OSBTreeRidBag ridBag,
+      OAtomicOperation atomicOperation) {
     final OBonsaiCollectionPointer collectionPointer = ridBag.getCollectionPointer();
     checkOpenness();
     checkLowDiskSpaceRequestsAndReadOnlyConditions();
 
-    stateLock.acquireWriteLock();
     try {
-      if (status == STATUS.OPEN) {
-        try {
-          makeStorageDirty();
-          atomicOperationsManager.executeInsideAtomicOperation((operation) -> sbTreeCollectionManager.delete(operation, collectionPointer));
-        } catch (final Exception e) {
-          OLogManager.instance().errorNoDb(this, "Error during deletion of rid bag", e);
-        }
-      }
-    } finally {
-      stateLock.releaseWriteLock();
+      makeStorageDirty();
+     sbTreeCollectionManager.delete(atomicOperation, collectionPointer);
+    } catch (final Exception e) {
+      OLogManager.instance().errorNoDb(this, "Error during deletion of rid bag", e);
     }
 
     ridBag.confirmDelete();
@@ -6342,7 +6339,7 @@ public abstract class OAbstractPaginatedStorage extends OStorageAbstract
 
     for (final Integer clusterId : clusters.keySet()) {
       atomicOperationsManager
-          .acquireExclusiveLockTillOperationComplete(atomicOperation, OSBTreeCollectionManagerAbstract.generateLockName(clusterId));
+          .acquireExclusiveLockTillOperationComplete(atomicOperation, OSBTreeCollectionManagerShared.generateLockName(clusterId));
     }
 
     for (final Map.Entry<String, OTransactionIndexChanges> entry : indexes.entrySet()) {

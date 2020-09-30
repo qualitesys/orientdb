@@ -74,7 +74,7 @@ public final class BTree extends ODurableComponent {
         });
   }
 
-  public void load(final String name) {
+  public void load() {
     acquireExclusiveLock();
     try {
       final OAtomicOperation atomicOperation = OAtomicOperationsManager.getCurrentOperation();
@@ -82,7 +82,7 @@ public final class BTree extends ODurableComponent {
       fileId = openFile(atomicOperation, getFullName());
     } catch (final IOException e) {
       throw OException.wrapException(
-          new OStorageException("Exception during loading of rid bag " + name), e);
+          new OStorageException("Exception during loading of rid bag " + getFullName()), e);
     } finally {
       releaseExclusiveLock();
     }
