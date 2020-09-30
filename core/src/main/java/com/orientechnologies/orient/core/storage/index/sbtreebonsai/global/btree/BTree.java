@@ -41,6 +41,10 @@ public final class BTree extends ODurableComponent {
     super(storage, name, fileExtension, name + fileExtension);
   }
 
+  public long getFileId() {
+    return fileId;
+  }
+
   public void create(final OAtomicOperation atomicOperation) {
     executeInsideComponentOperation(
         atomicOperation,
@@ -130,10 +134,11 @@ public final class BTree extends ODurableComponent {
     }
   }
 
-  public void put(final OAtomicOperation atomicOperation, final EdgeKey key, final int value) {
-    executeInsideComponentOperation(
+  public boolean put(final OAtomicOperation atomicOperation, final EdgeKey key, final int value) {
+    return calculateInsideComponentOperation(
         atomicOperation,
         operation -> {
+          final boolean result;
           acquireExclusiveLock();
           try {
             final byte[] serializedKey =
@@ -148,8 +153,10 @@ public final class BTree extends ODurableComponent {
 
             if (bucketSearchResult.itemIndex > -1) {
               oldRawValue = keyBucket.getRawValue(bucketSearchResult.itemIndex);
+              result = false;
             } else {
               oldRawValue = null;
+              result = true;
             }
 
             final byte[] serializedValue =
@@ -164,7 +171,7 @@ public final class BTree extends ODurableComponent {
                 keyBucket.updateValue(
                     bucketSearchResult.itemIndex, serializedValue, serializedKey.length);
                 releasePageFromWrite(atomicOperation, keyBucketCacheEntry);
-                return;
+                return false;
               } else {
                 keyBucket.removeLeafEntry(
                     bucketSearchResult.itemIndex, serializedKey.length, serializedValue.length);
@@ -209,6 +216,8 @@ public final class BTree extends ODurableComponent {
           } finally {
             releaseExclusiveLock();
           }
+
+          return result;
         });
   }
 

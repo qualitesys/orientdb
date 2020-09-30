@@ -20,8 +20,6 @@
 
 package com.orientechnologies.orient.core.storage.impl.local;
 
-import static com.orientechnologies.orient.core.config.OGlobalConfiguration.RID_BAG_SBTREEBONSAI_DELETE_DALAY;
-
 
 import com.orientechnologies.common.concur.ONeedRetryException;
 import com.orientechnologies.common.concur.lock.OComparableLockManager;
@@ -4847,12 +4845,12 @@ public abstract class OAbstractPaginatedStorage extends OStorageAbstract
           checkOpenness();
           checkIfThreadIsBlocked();
 
-          doTryToDeleteTreeRidBag(ridBag);
+          deleteTreeRidBag(ridBag);
         } finally {
           stateLock.releaseWriteLock();
         }
       } else {
-        doTryToDeleteTreeRidBag(ridBag);
+        deleteTreeRidBag(ridBag);
       }
     } catch (final RuntimeException ee) {
       throw logAndPrepareForRethrow(ee);
@@ -4863,40 +4861,25 @@ public abstract class OAbstractPaginatedStorage extends OStorageAbstract
     }
   }
 
-  private void doTryToDeleteTreeRidBag(OSBTreeRidBag ridBag) {
-    final long delay = configuration.getContextConfiguration().getValueAsInteger(RID_BAG_SBTREEBONSAI_DELETE_DALAY);
-    final long schedule = delay / 3;
-
+  private void deleteTreeRidBag(OSBTreeRidBag ridBag) {
     final OBonsaiCollectionPointer collectionPointer = ridBag.getCollectionPointer();
-    final Runnable deleteTask = new Runnable() {
-      @Override
-      public void run() {
-        checkOpenness();
-        checkLowDiskSpaceRequestsAndReadOnlyConditions();
+    checkOpenness();
+    checkLowDiskSpaceRequestsAndReadOnlyConditions();
 
-        stateLock.acquireWriteLock();
+    stateLock.acquireWriteLock();
+    try {
+      if (status == STATUS.OPEN) {
         try {
-          if (status == STATUS.OPEN) {
-            try {
-              makeStorageDirty();
-              final OAtomicOperationsManager atomicOperationsManager = OAbstractPaginatedStorage.this.atomicOperationsManager;
-
-              atomicOperationsManager.executeInsideAtomicOperation((operation) -> {
-                if (!sbTreeCollectionManager.tryDelete(operation, collectionPointer, delay)) {
-                  Orient.instance().scheduleTask(this, schedule, 0);
-                }
-              });
-            } catch (final Exception e) {
-              OLogManager.instance().errorNoDb(this, "Error during deletion of rid bag", e);
-            }
-          }
-        } finally {
-          stateLock.releaseWriteLock();
+          makeStorageDirty();
+          atomicOperationsManager.executeInsideAtomicOperation((operation) -> sbTreeCollectionManager.delete(operation, collectionPointer));
+        } catch (final Exception e) {
+          OLogManager.instance().errorNoDb(this, "Error during deletion of rid bag", e);
         }
       }
-    };
+    } finally {
+      stateLock.releaseWriteLock();
+    }
 
-    Orient.instance().scheduleTask(deleteTask, schedule, 0);
     ridBag.confirmDelete();
   }
 

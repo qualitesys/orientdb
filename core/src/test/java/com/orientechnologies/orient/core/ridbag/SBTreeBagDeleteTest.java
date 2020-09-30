@@ -28,13 +28,16 @@ public class SBTreeBagDeleteTest {
 
   @Before
   public void before() {
+    //noinspection deprecation
     db = new ODatabaseDocumentTx("memory:" + SBTreeBagDeleteTest.class.getSimpleName());
+    //noinspection deprecation
     db.create();
     db.getConfiguration().setValue(RID_BAG_SBTREEBONSAI_DELETE_DALAY, 50);
   }
 
   @After
   public void after() {
+    //noinspection deprecation
     db.drop();
   }
 
@@ -61,7 +64,6 @@ public class SBTreeBagDeleteTest {
     assertNull(doc);
 
     Thread.sleep(100);
-    ((OSBTreeCollectionManagerShared) db.getSbTreeCollectionManager()).clear();
     OSBTreeBonsai<OIdentifiable, Integer> tree = db.getSbTreeCollectionManager().loadSBTree(pointer);
     assertNull(tree);
   }
@@ -86,7 +88,6 @@ public class SBTreeBagDeleteTest {
     assertNull(doc);
 
     Thread.sleep(100);
-    ((OSBTreeCollectionManagerShared) db.getSbTreeCollectionManager()).clear();
     OSBTreeBonsai<OIdentifiable, Integer> tree = db.getSbTreeCollectionManager().loadSBTree(pointer);
     assertNull(tree);
   }

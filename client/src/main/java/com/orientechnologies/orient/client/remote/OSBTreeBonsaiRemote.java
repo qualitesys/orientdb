@@ -39,15 +39,17 @@ import java.util.Map;
 
 /**
  * Implementation of {@link OSBTreeBonsai} for remote storage.
- * 
+ *
  * @author Artem Orobets (enisher-at-gmail.com)
  */
 public class OSBTreeBonsaiRemote<K, V> implements OSBTreeBonsai<K, V> {
   private final OBonsaiCollectionPointer treePointer;
-  private final OBinarySerializer<K>     keySerializer;
-  private final OBinarySerializer<V>     valueSerializer;
+  private final OBinarySerializer<K> keySerializer;
+  private final OBinarySerializer<V> valueSerializer;
 
-  public OSBTreeBonsaiRemote(OBonsaiCollectionPointer treePointer, OBinarySerializer<K> keySerializer,
+  public OSBTreeBonsaiRemote(
+      OBonsaiCollectionPointer treePointer,
+      OBinarySerializer<K> keySerializer,
       OBinarySerializer<V> valueSerializer) {
     this.treePointer = treePointer;
     this.keySerializer = keySerializer;
@@ -71,18 +73,21 @@ public class OSBTreeBonsaiRemote<K, V> implements OSBTreeBonsai<K, V> {
 
   @Override
   public V get(K key) {
-    final OStorageRemote storage = (OStorageRemote) ODatabaseRecordThreadLocal.instance().get().getStorage().getUnderlying();
+    final OStorageRemote storage =
+        (OStorageRemote) ODatabaseRecordThreadLocal.instance().get().getStorage().getUnderlying();
     final byte[] keyStream = new byte[keySerializer.getObjectSize(key)];
     keySerializer.serialize(key, keyStream, 0);
     final OBonsaiCollectionPointer collectionPointer = getCollectionPointer();
     OSBTGetRequest request = new OSBTGetRequest(collectionPointer, keyStream);
 
-    OSBTGetResponse response = storage.networkOperation(request, "Cannot get by key from sb-tree bonsai");
+    OSBTGetResponse response =
+        storage.networkOperation(request, "Cannot get by key from sb-tree bonsai");
 
     byte[] stream = response.getStream();
     final byte serializerId = OByteSerializer.INSTANCE.deserializeLiteral(stream, 0);
-    final OBinarySerializer<V> serializer = (OBinarySerializer<V>) OBinarySerializerFactory.getInstance()
-        .getObjectSerializer(serializerId);
+    @SuppressWarnings("unchecked") final OBinarySerializer<V> serializer =
+        (OBinarySerializer<V>)
+            OBinarySerializerFactory.getInstance().getObjectSerializer(serializerId);
     return serializer.deserialize(stream, OByteSerializer.BYTE_SIZE);
   }
 
@@ -97,7 +102,7 @@ public class OSBTreeBonsaiRemote<K, V> implements OSBTreeBonsai<K, V> {
   }
 
   @Override
-  public void clear(OAtomicOperation atomicOperation) throws IOException {
+  public void clear(OAtomicOperation atomicOperation) {
     throw new UnsupportedOperationException("Not implemented yet");
   }
 
@@ -107,7 +112,7 @@ public class OSBTreeBonsaiRemote<K, V> implements OSBTreeBonsai<K, V> {
   }
 
   @Override
-  public long size() {
+  public boolean isEmpty() {
     throw new UnsupportedOperationException("Not implemented yet");
   }
 
@@ -127,9 +132,9 @@ public class OSBTreeBonsaiRemote<K, V> implements OSBTreeBonsai<K, V> {
   }
 
   @Override
-  public void loadEntriesMajor(K key, boolean inclusive, boolean ascSortOrder, RangeResultListener<K, V> listener) {
-    if (!ascSortOrder)
-      throw new IllegalStateException("Descending sort order is not supported");
+  public void loadEntriesMajor(
+      K key, boolean inclusive, boolean ascSortOrder, RangeResultListener<K, V> listener) {
+    if (!ascSortOrder) throw new IllegalStateException("Descending sort order is not supported");
 
     List<Map.Entry<K, V>> entries = fetchEntriesMajor(key, inclusive);
 
@@ -139,13 +144,13 @@ public class OSBTreeBonsaiRemote<K, V> implements OSBTreeBonsai<K, V> {
     }
   }
 
-  private boolean pushEntriesToListener(RangeResultListener<K, V> listener, List<Map.Entry<K, V>> entries) {
+  private boolean pushEntriesToListener(
+      RangeResultListener<K, V> listener, List<Map.Entry<K, V>> entries) {
     boolean more = false;
     for (Map.Entry<K, V> entry : entries) {
       more = listener.addResult(entry);
 
-      if (!more)
-        return false;
+      if (!more) return false;
     }
     return more;
   }
@@ -153,33 +158,39 @@ public class OSBTreeBonsaiRemote<K, V> implements OSBTreeBonsai<K, V> {
   private List<Map.Entry<K, V>> fetchEntriesMajor(final K key, final boolean inclusive) {
     final byte[] keyStream = new byte[keySerializer.getObjectSize(key)];
     keySerializer.serialize(key, keyStream, 0);
-    final OStorageRemote storage = (OStorageRemote) ODatabaseRecordThreadLocal.instance().get().getStorage().getUnderlying();
-    OSBTFetchEntriesMajorRequest<K, V> request = new OSBTFetchEntriesMajorRequest<K, V>(inclusive, keyStream,
-        getCollectionPointer(), keySerializer, valueSerializer);
-    OSBTFetchEntriesMajorResponse<K, V> response = storage.networkOperation(request, "Cannot get first key from sb-tree bonsai");
+    final OStorageRemote storage =
+        (OStorageRemote) ODatabaseRecordThreadLocal.instance().get().getStorage().getUnderlying();
+    OSBTFetchEntriesMajorRequest<K, V> request =
+        new OSBTFetchEntriesMajorRequest<K, V>(
+            inclusive, keyStream, getCollectionPointer(), keySerializer, valueSerializer);
+    OSBTFetchEntriesMajorResponse<K, V> response =
+        storage.networkOperation(request, "Cannot get first key from sb-tree bonsai");
 
     return response.getList();
   }
 
   @Override
-  public Collection<V> getValuesBetween(K keyFrom, boolean fromInclusive, K keyTo, boolean toInclusive, int maxValuesToFetch) {
+  public Collection<V> getValuesBetween(
+      K keyFrom, boolean fromInclusive, K keyTo, boolean toInclusive, int maxValuesToFetch) {
 
     throw new UnsupportedOperationException("Not implemented yet");
   }
 
   @Override
   public K firstKey() {
-    final OStorageRemote storage = (OStorageRemote) ODatabaseRecordThreadLocal.instance().get().getStorage().getUnderlying();
+    final OStorageRemote storage =
+        (OStorageRemote) ODatabaseRecordThreadLocal.instance().get().getStorage().getUnderlying();
     final OBonsaiCollectionPointer collectionPointer = getCollectionPointer();
     OSBTFirstKeyRequest request = new OSBTFirstKeyRequest(collectionPointer);
-    OSBTFirstKeyResponse response = storage.networkOperation(request, "Cannot get first key from sb-tree bonsai");
+    OSBTFirstKeyResponse response =
+        storage.networkOperation(request, "Cannot get first key from sb-tree bonsai");
 
     byte[] stream = response.getStream();
     final byte serializerId = OByteSerializer.INSTANCE.deserializeLiteral(stream, 0);
-    final OBinarySerializer<K> serializer = (OBinarySerializer<K>) OBinarySerializerFactory.getInstance()
-        .getObjectSerializer(serializerId);
+    @SuppressWarnings("unchecked") final OBinarySerializer<K> serializer =
+        (OBinarySerializer<K>)
+            OBinarySerializerFactory.getInstance().getObjectSerializer(serializerId);
     return serializer.deserialize(stream, OByteSerializer.BYTE_SIZE);
-
   }
 
   @Override
@@ -188,7 +199,11 @@ public class OSBTreeBonsaiRemote<K, V> implements OSBTreeBonsai<K, V> {
   }
 
   @Override
-  public void loadEntriesBetween(K keyFrom, boolean fromInclusive, K keyTo, boolean toInclusive,
+  public void loadEntriesBetween(
+      K keyFrom,
+      boolean fromInclusive,
+      K keyTo,
+      boolean toInclusive,
       RangeResultListener<K, V> listener) {
 
     throw new UnsupportedOperationException("Not implemented yet");
@@ -196,11 +211,16 @@ public class OSBTreeBonsaiRemote<K, V> implements OSBTreeBonsai<K, V> {
 
   @Override
   public int getRealBagSize(final Map<K, Change> changes) {
-    final OStorageRemote storage = (OStorageRemote) ODatabaseRecordThreadLocal.instance().get().getStorage().getUnderlying();
+    final OStorageRemote storage =
+        (OStorageRemote) ODatabaseRecordThreadLocal.instance().get().getStorage().getUnderlying();
     final OBonsaiCollectionPointer collectionPointer = getCollectionPointer();
-    OSBTGetRealBagSizeRequest request = new OSBTGetRealBagSizeRequest((OBinarySerializer<OIdentifiable>) keySerializer,
-        collectionPointer, (Map<OIdentifiable, Change>) changes);
-    OSBTGetRealBagSizeResponse response = storage.networkOperation(request, "Cannot get by real bag size sb-tree bonsai");
+    @SuppressWarnings("unchecked") OSBTGetRealBagSizeRequest request =
+        new OSBTGetRealBagSizeRequest(
+            (OBinarySerializer<OIdentifiable>) keySerializer,
+            collectionPointer,
+            (Map<OIdentifiable, Change>) changes);
+    OSBTGetRealBagSizeResponse response =
+        storage.networkOperation(request, "Cannot get by real bag size sb-tree bonsai");
     return response.getRealSize();
   }
 
@@ -212,11 +232,6 @@ public class OSBTreeBonsaiRemote<K, V> implements OSBTreeBonsai<K, V> {
   @Override
   public OBinarySerializer<V> getValueSerializer() {
     return valueSerializer;
-  }
-
-  @Override
-  public void markToDelete(OAtomicOperation atomicOperation) {
-    throw  new UnsupportedOperationException();
   }
 
   public static class TreeEntry<EK, EV> implements Map.Entry<EK, EV> {
@@ -243,5 +258,4 @@ public class OSBTreeBonsaiRemote<K, V> implements OSBTreeBonsai<K, V> {
       throw new UnsupportedOperationException();
     }
   }
-
 }

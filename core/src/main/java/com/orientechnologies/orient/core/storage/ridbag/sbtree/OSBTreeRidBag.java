@@ -808,7 +808,7 @@ public class OSBTreeRidBag implements ORidBagDelegate {
   public void requestDelete() {
     final ORecordSerializationContext context = ORecordSerializationContext.getContext();
     if (context != null && collectionPointer != null) {
-      context.push(new ORidBagDeleteSerializationOperation(collectionPointer, this));
+      context.push(new ORidBagDeleteSerializationOperation(this));
     }
   }
 
@@ -1023,7 +1023,7 @@ public class OSBTreeRidBag implements ORidBagDelegate {
   public void debugPrint(PrintStream writer) throws IOException {
     OSBTreeBonsai<OIdentifiable, Integer> tree = loadTree();
     if (tree instanceof OSBTreeBonsaiLocal) {
-      ((OSBTreeBonsaiLocal) tree).debugPrintBucket(writer);
+      ((OSBTreeBonsaiLocal<?,?>) tree).debugPrintBucket(writer);
     }
   }
 

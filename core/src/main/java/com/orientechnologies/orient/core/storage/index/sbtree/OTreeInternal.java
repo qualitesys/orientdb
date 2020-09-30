@@ -31,7 +31,7 @@ import java.util.Map;
  * @author Artem Orobets (enisher-at-gmail.com)
  */
 public interface OTreeInternal<K, V> {
-  long size();
+  boolean isEmpty();
 
   void loadEntriesMajor(K key, boolean inclusive, boolean ascSortOrder, RangeResultListener<K, V> listener);
 
@@ -53,12 +53,12 @@ public interface OTreeInternal<K, V> {
     boolean addResult(Map.Entry<K, V> entry);
   }
 
-  public class AccumulativeListener<K, V> implements RangeResultListener<K, V> {
+  class AccumulativeListener<K, V> implements RangeResultListener<K, V> {
     private final int             limit;
     private List<Map.Entry<K, V>> entries;
 
     public AccumulativeListener(int limit) {
-      entries = new ArrayList<Map.Entry<K, V>>(limit);
+      entries = new ArrayList<>(limit);
       this.limit = limit;
     }
 

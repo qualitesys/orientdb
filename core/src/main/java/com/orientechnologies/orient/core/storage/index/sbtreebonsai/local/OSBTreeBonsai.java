@@ -72,7 +72,6 @@ public interface OSBTreeBonsai<K, V> extends OTreeInternal<K, V> {
   /**
    * Search for entry with specific key and return its value.
    * 
-   * @param key
    * @return value associated with given key, NULL if no value is associated.
    */
   V get(K key);
@@ -81,17 +80,15 @@ public interface OSBTreeBonsai<K, V> extends OTreeInternal<K, V> {
 
   /**
    * Deletes all entries from tree.
-   * @param atomicOperation
    */
   void clear(OAtomicOperation atomicOperation) throws IOException;
 
   /**
    * Deletes whole tree. After this operation tree is no longer usable.
-   * @param atomicOperation
    */
   void delete(OAtomicOperation atomicOperation) throws IOException;
 
-  long size();
+  boolean isEmpty();
 
   V remove(OAtomicOperation atomicOperation, K key) throws IOException;
 
@@ -125,6 +122,4 @@ public interface OSBTreeBonsai<K, V> extends OTreeInternal<K, V> {
   OBinarySerializer<K> getKeySerializer();
 
   OBinarySerializer<V> getValueSerializer();
-
-  void markToDelete(OAtomicOperation atomicOperation) throws IOException;
 }

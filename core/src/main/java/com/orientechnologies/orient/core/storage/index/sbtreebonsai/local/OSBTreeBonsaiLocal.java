@@ -108,7 +108,6 @@ public class OSBTreeBonsaiLocal<K, V> extends ODurableComponent implements OSBTr
     }
   }
 
-  @Override
   public long getFileId() {
     final Lock lock = FILE_LOCK_MANAGER.acquireSharedLock(fileId);
     try {
@@ -118,7 +117,6 @@ public class OSBTreeBonsaiLocal<K, V> extends ODurableComponent implements OSBTr
     }
   }
 
-  @Override
   public OBonsaiBucketPointer getRootBucketPointer() {
     final Lock lock = FILE_LOCK_MANAGER.acquireSharedLock(fileId);
     try {
@@ -358,6 +356,11 @@ public class OSBTreeBonsaiLocal<K, V> extends ODurableComponent implements OSBTr
     });
   }
 
+  @Override
+  public boolean isEmpty() {
+    return size() == 0;
+  }
+
   public boolean tryDelete(final OAtomicOperation atomicOperation) {
     return tryExecuteInsideComponentOperation(atomicOperation, (operation) -> {
       final Lock lock = FILE_LOCK_MANAGER.acquireExclusiveLock(fileId);
@@ -417,7 +420,6 @@ public class OSBTreeBonsaiLocal<K, V> extends ODurableComponent implements OSBTr
     }
   }
 
-  @Override
   public long size() {
     atomicOperationsManager.acquireReadLock(this);
     try {
@@ -426,7 +428,7 @@ public class OSBTreeBonsaiLocal<K, V> extends ODurableComponent implements OSBTr
         final OAtomicOperation atomicOperation = OAtomicOperationsManager.getCurrentOperation();
         final OCacheEntry rootCacheEntry = loadPageForRead(atomicOperation, fileId, rootBucketPointer.getPageIndex(), false);
         try {
-          final OSBTreeBonsaiBucket rootBucket = new OSBTreeBonsaiBucket<>(rootCacheEntry, rootBucketPointer.getPageOffset(),
+          final OSBTreeBonsaiBucket<?,?> rootBucket = new OSBTreeBonsaiBucket<>(rootCacheEntry, rootBucketPointer.getPageOffset(),
               keySerializer, valueSerializer, this);
           return rootBucket.getTreeSize();
         } finally {
@@ -1317,7 +1319,6 @@ public class OSBTreeBonsaiLocal<K, V> extends ODurableComponent implements OSBTr
 
   }
 
-  @Override
   public void markToDelete(final OAtomicOperation atomicOperation) {
     executeInsideComponentOperation(atomicOperation, (operation) -> {
       final Lock lock = FILE_LOCK_MANAGER.acquireExclusiveLock(fileId);
