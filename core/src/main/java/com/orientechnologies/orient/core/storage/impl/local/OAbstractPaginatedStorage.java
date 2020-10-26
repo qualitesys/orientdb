@@ -6197,6 +6197,8 @@ public abstract class OAbstractPaginatedStorage extends OStorageAbstract
       return null;
     }
 
+    writeCache.restoreModeOn();
+
     writeAheadLog.addCutTillLimit(end);
     try {
       OLogSequenceNumber lastSLN = readLastLSN();
