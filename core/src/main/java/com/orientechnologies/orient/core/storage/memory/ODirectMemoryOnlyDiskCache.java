@@ -629,7 +629,8 @@ public final class ODirectMemoryOnlyDiskCache extends OAbstractWriteCache
   }
 
   @Override
-  public final void makeFuzzyCheckpoint(final long segmentId, byte[] lastMetadata) {}
+  public final void syncDataFiles(final long segmentId, byte[] lastMetadata) {
+  }
 
   @Override
   public final void flushTillSegment(final long segmentId) {}

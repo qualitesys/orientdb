@@ -35,59 +35,12 @@ public abstract class OAbstractWriteAheadLog implements OWriteAheadLog {
   private OLogSequenceNumber lastCheckpoint;
 
   @Override
-  public OLogSequenceNumber logFuzzyCheckPointStart(OLogSequenceNumber flushedLsn)
-      throws IOException {
-    syncObject.lock();
-    try {
-      checkForClose();
-
-      OFuzzyCheckpointStartRecord record =
-          new OFuzzyCheckpointStartRecord(lastCheckpoint, flushedLsn);
-      log(record);
-      return record.getLsn();
-    } finally {
-      syncObject.unlock();
-    }
-  }
-
-  @Override
-  public OLogSequenceNumber logFuzzyCheckPointEnd() throws IOException {
-    syncObject.lock();
-    try {
-      checkForClose();
-
-      OFuzzyCheckpointEndRecord record = new OFuzzyCheckpointEndRecord();
-      log(record);
-      return record.getLsn();
-    } finally {
-      syncObject.unlock();
-    }
-  }
-
-  @Override
-  public OLogSequenceNumber logFullCheckpointStart() throws IOException {
-    return log(new OFullCheckpointStartRecord(lastCheckpoint));
-  }
-
-  @Override
   public OLogSequenceNumber logFullCheckpointEnd() throws IOException {
     syncObject.lock();
     try {
       checkForClose();
 
       return log(new OCheckpointEndRecord());
-    } finally {
-      syncObject.unlock();
-    }
-  }
-
-  @Override
-  public OLogSequenceNumber getLastCheckpoint() {
-    syncObject.lock();
-    try {
-      checkForClose();
-
-      return lastCheckpoint;
     } finally {
       syncObject.unlock();
     }

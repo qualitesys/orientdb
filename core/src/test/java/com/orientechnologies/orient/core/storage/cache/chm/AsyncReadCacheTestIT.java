@@ -388,7 +388,8 @@ public class AsyncReadCacheTestIT {
     }
 
     @Override
-    public void makeFuzzyCheckpoint(long segmentId, byte[] lastMetadata) throws IOException {}
+    public void syncDataFiles(long segmentId, byte[] lastMetadata) throws IOException {
+    }
 
     @Override
     public void flushTillSegment(final long segmentId) {}

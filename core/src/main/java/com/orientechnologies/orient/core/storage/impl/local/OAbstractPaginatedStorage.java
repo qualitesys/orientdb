@@ -138,16 +138,11 @@ import com.orientechnologies.orient.core.storage.impl.local.paginated.atomicoper
 import com.orientechnologies.orient.core.storage.impl.local.paginated.atomicoperations.OAtomicOperationsManager;
 import com.orientechnologies.orient.core.storage.impl.local.paginated.base.ODurablePage;
 import com.orientechnologies.orient.core.storage.impl.local.paginated.wal.MetaDataRecord;
-import com.orientechnologies.orient.core.storage.impl.local.paginated.wal.OAbstractCheckPointStartRecord;
 import com.orientechnologies.orient.core.storage.impl.local.paginated.wal.OAtomicUnitEndRecord;
 import com.orientechnologies.orient.core.storage.impl.local.paginated.wal.OAtomicUnitStartMetadataRecord;
 import com.orientechnologies.orient.core.storage.impl.local.paginated.wal.OAtomicUnitStartRecord;
-import com.orientechnologies.orient.core.storage.impl.local.paginated.wal.OCheckpointEndRecord;
 import com.orientechnologies.orient.core.storage.impl.local.paginated.wal.OFileCreatedWALRecord;
 import com.orientechnologies.orient.core.storage.impl.local.paginated.wal.OFileDeletedWALRecord;
-import com.orientechnologies.orient.core.storage.impl.local.paginated.wal.OFullCheckpointStartRecord;
-import com.orientechnologies.orient.core.storage.impl.local.paginated.wal.OFuzzyCheckpointEndRecord;
-import com.orientechnologies.orient.core.storage.impl.local.paginated.wal.OFuzzyCheckpointStartRecord;
 import com.orientechnologies.orient.core.storage.impl.local.paginated.wal.OHighLevelTransactionChangeRecord;
 import com.orientechnologies.orient.core.storage.impl.local.paginated.wal.OLogSequenceNumber;
 import com.orientechnologies.orient.core.storage.impl.local.paginated.wal.ONonTxOperationPerformedWALRecord;
@@ -157,6 +152,7 @@ import com.orientechnologies.orient.core.storage.impl.local.paginated.wal.OUpdat
 import com.orientechnologies.orient.core.storage.impl.local.paginated.wal.OWALPageBrokenException;
 import com.orientechnologies.orient.core.storage.impl.local.paginated.wal.OWALRecord;
 import com.orientechnologies.orient.core.storage.impl.local.paginated.wal.OWriteAheadLog;
+import com.orientechnologies.orient.core.storage.impl.local.paginated.wal.common.EmptyWALRecord;
 import com.orientechnologies.orient.core.storage.impl.local.paginated.wal.common.WriteableWALRecord;
 import com.orientechnologies.orient.core.storage.index.engine.OHashTableIndexEngine;
 import com.orientechnologies.orient.core.storage.index.engine.OSBTreeIndexEngine;
@@ -181,6 +177,7 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -2618,8 +2615,7 @@ public abstract class OAbstractPaginatedStorage extends OStorageAbstract
       final int version,
       final int apiVersion,
       final boolean multivalue,
-      final Map<String, String> engineProperties,
-      final ODocument metadata) {
+      final Map<String, String> engineProperties) {
     try {
       checkOpenness();
 
@@ -2641,8 +2637,7 @@ public abstract class OAbstractPaginatedStorage extends OStorageAbstract
 
         makeStorageDirty();
 
-        final OBinarySerializer<?> keySerializer =
-            determineKeySerializer(indexDefinition, metadata);
+        final OBinarySerializer<?> keySerializer = determineKeySerializer(indexDefinition);
         if (keySerializer == null) {
           throw new OIndexException("Can not determine key serializer");
         }
@@ -2779,8 +2774,7 @@ public abstract class OAbstractPaginatedStorage extends OStorageAbstract
                 }
               }
 
-              final OBinarySerializer<?> keySerializer =
-                  determineKeySerializer(indexDefinition, metadata);
+              final OBinarySerializer<?> keySerializer = determineKeySerializer(indexDefinition);
               if (keySerializer == null) {
                 throw new OIndexException("Can not determine key serializer");
               }
@@ -2964,8 +2958,7 @@ public abstract class OAbstractPaginatedStorage extends OStorageAbstract
     }
   }
 
-  private OBinarySerializer<?> determineKeySerializer(
-      final OIndexDefinition indexDefinition, final ODocument metadata) {
+  private OBinarySerializer<?> determineKeySerializer(final OIndexDefinition indexDefinition) {
     if (indexDefinition == null) {
       throw new OStorageException("Index definition has to be provided");
     }
@@ -3166,7 +3159,7 @@ public abstract class OAbstractPaginatedStorage extends OStorageAbstract
         checkLowDiskSpaceRequestsAndReadOnlyConditions();
 
         atomicOperationsManager.executeInsideAtomicOperation(
-            null, atomicOperation -> doClearIndex(atomicOperation, indexId));
+            null, atomicOperation -> doClearIndex(atomicOperation, internalIndexId));
       } finally {
         stateLock.releaseReadLock();
       }
@@ -4239,18 +4232,6 @@ public abstract class OAbstractPaginatedStorage extends OStorageAbstract
     }
   }
 
-  private OCluster doGetClusterByName(final String clusterName) {
-    final OCluster cluster =
-        clusterMap.get(clusterName.toLowerCase(configuration.getLocaleInstance()));
-
-    if (cluster == null) {
-      throw new OStorageException(
-          "Cluster " + clusterName + " does not exist in database '" + name + "'");
-    }
-
-    return cluster;
-  }
-
   @Override
   public final long getSize() {
     try {
@@ -5035,7 +5016,7 @@ public abstract class OAbstractPaginatedStorage extends OStorageAbstract
 
       if (fuzzySegment > beginLSN.getSegment() && beginLSN.getSegment() < endLSN.getSegment()) {
         OLogManager.instance().debugNoDb(this, "Making fuzzy checkpoint", null);
-        writeCache.makeFuzzyCheckpoint(fuzzySegment, lastMetadata);
+        writeCache.syncDataFiles(fuzzySegment, lastMetadata);
 
         beginLSN = writeAheadLog.begin();
         endLSN = writeAheadLog.end();
@@ -5130,14 +5111,14 @@ public abstract class OAbstractPaginatedStorage extends OStorageAbstract
   protected void makeFullCheckpoint() {
     try {
 
-      writeAheadLog.flush();
-
       // so we will be able to cut almost all the log
       writeAheadLog.appendNewSegment();
+      final OLogSequenceNumber begin;
 
-      final OLogSequenceNumber lastLSN = writeAheadLog.logFullCheckpointStart();
       if (lastMetadata != null) {
-        writeAheadLog.log(new MetaDataRecord(lastMetadata));
+        begin = writeAheadLog.log(new MetaDataRecord(lastMetadata));
+      } else {
+        begin = writeAheadLog.log(new EmptyWALRecord());
       }
 
       writeCache.flush();
@@ -5149,10 +5130,7 @@ public abstract class OAbstractPaginatedStorage extends OStorageAbstract
             "Can not perform full checkpoint if some of atomic operations in progress");
       }
 
-      writeAheadLog.logFullCheckpointEnd();
-      writeAheadLog.flush();
-
-      writeAheadLog.cutTill(lastLSN);
+      writeAheadLog.cutTill(begin);
 
       if (jvmError.get() == null) {
         clearStorageDirty();
@@ -6204,13 +6182,14 @@ public abstract class OAbstractPaginatedStorage extends OStorageAbstract
   }
 
   private OLogSequenceNumber restoreFromWAL() throws IOException {
-    if (writeAheadLog.begin() == null) {
+    final OLogSequenceNumber begin = writeAheadLog.begin();
+    if (begin == null) {
       OLogManager.instance()
           .error(this, "Restore is not possible because write ahead log is empty.", null);
       return null;
     }
 
-    OLogManager.instance().info(this, "Looking for last checkpoint...");
+    OLogManager.instance().info(this, "Looking for the latest stored page operation ...");
 
     final OLogSequenceNumber end = writeAheadLog.end();
     if (end == null) {
@@ -6220,116 +6199,74 @@ public abstract class OAbstractPaginatedStorage extends OStorageAbstract
 
     writeAheadLog.addCutTillLimit(end);
     try {
-      OLogSequenceNumber lastCheckPoint;
-      try {
-        lastCheckPoint = writeAheadLog.getLastCheckpoint();
-      } catch (final OWALPageBrokenException ignore) {
-        lastCheckPoint = null;
-      }
+      OLogSequenceNumber lastSLN = readLastLSN();
 
-      if (lastCheckPoint == null) {
+      if (lastSLN == null) {
         OLogManager.instance()
-            .info(this, "Checkpoints are absent, the restore will start from the beginning.");
+            .infoNoDb(
+                this, "No information is stored in database, restoring from the begging of WAL ..");
         return restoreFromBeginning();
-      }
-
-      List<WriteableWALRecord> checkPointRecord;
-      try {
-        checkPointRecord = writeAheadLog.read(lastCheckPoint, 1);
-      } catch (final OWALPageBrokenException ignore) {
-        checkPointRecord = Collections.emptyList();
-      }
-
-      if (checkPointRecord.isEmpty()) {
+      } else if (begin.compareTo(lastSLN) > 0) {
+        lastSLN = begin;
         OLogManager.instance()
-            .info(this, "Checkpoints are absent, the restore will start from the beginning.");
-        return restoreFromBeginning();
+            .errorNoDb(
+                this,
+                "Latest stored LSN inside of the page is %s but stored inside of WAL is %s. As result data can not be restored completely !",
+                null);
       }
 
-      if (checkPointRecord.get(0) instanceof OFuzzyCheckpointStartRecord) {
-        OLogManager.instance().info(this, "Found FUZZY checkpoint.");
-
-        final boolean fuzzyCheckPointIsComplete = checkFuzzyCheckPointIsComplete(lastCheckPoint);
-        if (!fuzzyCheckPointIsComplete) {
-          OLogManager.instance().warn(this, "FUZZY checkpoint is not complete.");
-
-          OFuzzyCheckpointStartRecord checkpointStartRecord =
-              (OFuzzyCheckpointStartRecord) checkPointRecord.get(0);
-          final OLogSequenceNumber previousCheckpoint =
-              checkpointStartRecord.getPreviousCheckpoint();
-          checkPointRecord = Collections.emptyList();
-
-          if (previousCheckpoint != null) {
-            checkPointRecord = writeAheadLog.read(previousCheckpoint, 1);
-          }
-
-          if (!checkPointRecord.isEmpty()) {
-            OLogManager.instance().warn(this, "Restore will start from the previous checkpoint.");
-            return restoreFromCheckPoint((OAbstractCheckPointStartRecord) checkPointRecord.get(0));
-          } else {
-            OLogManager.instance().warn(this, "Restore will start from the beginning.");
-            return restoreFromBeginning();
-          }
-        } else {
-          return restoreFromCheckPoint((OAbstractCheckPointStartRecord) checkPointRecord.get(0));
-        }
-      }
-
-      if (checkPointRecord.get(0) instanceof OFullCheckpointStartRecord) {
-        OLogManager.instance().info(this, "FULL checkpoint found.");
-        final boolean fullCheckPointIsComplete = checkFullCheckPointIsComplete(lastCheckPoint);
-
-        if (!fullCheckPointIsComplete) {
-          OLogManager.instance().warn(this, "FULL checkpoint has not completed.");
-
-          OFullCheckpointStartRecord checkpointStartRecord =
-              (OFullCheckpointStartRecord) checkPointRecord.get(0);
-          final OLogSequenceNumber previousCheckpoint =
-              checkpointStartRecord.getPreviousCheckpoint();
-
-          checkPointRecord = Collections.emptyList();
-          if (previousCheckpoint != null) {
-            checkPointRecord = writeAheadLog.read(previousCheckpoint, 1);
-          }
-
-          if (!checkPointRecord.isEmpty()) {
-            OLogManager.instance().warn(this, "Restore will start from the previous checkpoint.");
-            return restoreFromCheckPoint((OAbstractCheckPointStartRecord) checkPointRecord.get(0));
-          } else {
-            OLogManager.instance().warn(this, "Restore will start from the beginning.");
-            return restoreFromBeginning();
-          }
-        } else {
-          return restoreFromCheckPoint((OAbstractCheckPointStartRecord) checkPointRecord.get(0));
-        }
-      }
-
-      throw new OStorageException(
-          "Unknown checkpoint record type " + checkPointRecord.get(0).getClass().getName());
+      return restoreFrom(lastSLN, writeAheadLog, true);
     } finally {
       writeAheadLog.removeCutTillLimit(end);
     }
   }
 
-  private boolean checkFullCheckPointIsComplete(final OLogSequenceNumber lastCheckPoint)
-      throws IOException {
-    try {
-      List<WriteableWALRecord> walRecords = writeAheadLog.next(lastCheckPoint, 10);
+  private OLogSequenceNumber readLastLSN() throws IOException {
+    OLogSequenceNumber minLSN = null;
 
-      while (!walRecords.isEmpty()) {
-        for (final WriteableWALRecord walRecord : walRecords) {
-          if (walRecord instanceof OCheckpointEndRecord) {
-            return true;
+    final Map<String, Long> files = writeCache.files();
+    int counter = 0;
+
+    for (final Map.Entry<String, Long> entry : files.entrySet()) {
+      counter++;
+
+      OLogManager.instance()
+          .infoNoDb(
+              this,
+              "Pre-processing of %s file, %d out of %d",
+              entry.getKey(),
+              counter,
+              files.size());
+
+      final long filledUpTo = writeCache.getFilledUpTo(entry.getValue());
+
+      for (long pageIndex = 0; pageIndex < filledUpTo; pageIndex++) {
+        final OCacheEntry cacheEntry =
+            readCache.loadForRead(entry.getValue(), pageIndex, false, writeCache, true);
+        try {
+          final ByteBuffer byteBuffer = cacheEntry.getCachePointer().getBufferDuplicate();
+          assert byteBuffer != null;
+          final OLogSequenceNumber lsn = ODurablePage.getLogSequenceNumberFromPage(byteBuffer);
+
+          if (minLSN == null) {
+            minLSN = lsn;
+          } else if (lsn.compareTo(minLSN) < 0) {
+            minLSN = lsn;
           }
+        } finally {
+          readCache.releaseFromRead(cacheEntry, writeCache);
         }
-
-        walRecords = writeAheadLog.next(walRecords.get(walRecords.size() - 1).getLsn(), 10);
       }
-    } catch (final OWALPageBrokenException ignore) {
-      return false;
     }
 
-    return false;
+    if (minLSN != null) {
+      OLogManager.instance()
+          .infoNoDb(this, "Pre-processing complete latest stored LSN is %s", minLSN.toString());
+    } else {
+      OLogManager.instance().infoNoDb(this, "Pre-processing complete, no stored data were found");
+    }
+
+    return minLSN;
   }
 
   @SuppressWarnings("CanBeFinal")
@@ -6364,72 +6301,6 @@ public abstract class OAbstractPaginatedStorage extends OStorageAbstract
       throws UnsupportedOperationException {
     throw new UnsupportedOperationException(
         "Incremental backup is supported only in enterprise version");
-  }
-
-  private boolean checkFuzzyCheckPointIsComplete(final OLogSequenceNumber lastCheckPoint)
-      throws IOException {
-    try {
-      List<WriteableWALRecord> walRecords = writeAheadLog.next(lastCheckPoint, 10);
-
-      while (!walRecords.isEmpty()) {
-        for (final WriteableWALRecord walRecord : walRecords) {
-          if (walRecord instanceof OFuzzyCheckpointEndRecord) {
-            return true;
-          }
-        }
-
-        walRecords = writeAheadLog.next(walRecords.get(walRecords.size() - 1).getLsn(), 10);
-      }
-    } catch (final OWALPageBrokenException ignore) {
-      return false;
-    }
-
-    return false;
-  }
-
-  private OLogSequenceNumber restoreFromCheckPoint(
-      final OAbstractCheckPointStartRecord checkPointRecord) throws IOException {
-    if (checkPointRecord instanceof OFuzzyCheckpointStartRecord) {
-      return restoreFromFuzzyCheckPoint((OFuzzyCheckpointStartRecord) checkPointRecord);
-    }
-
-    if (checkPointRecord instanceof OFullCheckpointStartRecord) {
-      return restoreFromFullCheckPoint((OFullCheckpointStartRecord) checkPointRecord);
-    }
-
-    throw new OStorageException(
-        "Unknown checkpoint record type " + checkPointRecord.getClass().getName());
-  }
-
-  private OLogSequenceNumber restoreFromFullCheckPoint(
-      final OFullCheckpointStartRecord checkPointRecord) throws IOException {
-    OLogManager.instance()
-        .info(
-            this,
-            "Data restore procedure from full checkpoint is started. Restore is performed from LSN %s",
-            checkPointRecord.getLsn());
-
-    final OLogSequenceNumber lsn = writeAheadLog.next(checkPointRecord.getLsn(), 1).get(0).getLsn();
-    return restoreFrom(lsn, writeAheadLog, true);
-  }
-
-  private OLogSequenceNumber restoreFromFuzzyCheckPoint(
-      final OFuzzyCheckpointStartRecord checkPointRecord) throws IOException {
-    OLogManager.instance()
-        .infoNoDb(this, "Data restore procedure from FUZZY checkpoint is started.");
-    OLogSequenceNumber flushedLsn = checkPointRecord.getFlushedLsn();
-
-    if (flushedLsn.compareTo(writeAheadLog.begin()) < 0) {
-      OLogManager.instance()
-          .errorNoDb(
-              this,
-              "Fuzzy checkpoint points to removed part of the log, "
-                  + "will try to restore data from the rest of the WAL",
-              null);
-      flushedLsn = writeAheadLog.begin();
-    }
-
-    return restoreFrom(flushedLsn, writeAheadLog, true);
   }
 
   private OLogSequenceNumber restoreFromBeginning() throws IOException {
@@ -7485,7 +7356,7 @@ public abstract class OAbstractPaginatedStorage extends OStorageAbstract
           return;
         }
 
-        writeCache.makeFuzzyCheckpoint(minDirtySegment, lastMetadata);
+        writeCache.syncDataFiles(minDirtySegment, lastMetadata);
 
       } catch (final Exception e) {
         dataFlushException = e;

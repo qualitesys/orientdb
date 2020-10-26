@@ -77,7 +77,7 @@ public interface OWriteCache {
 
   boolean checkLowDiskSpace() throws IOException;
 
-  void makeFuzzyCheckpoint(long segmentId, byte[] lastMetadata) throws IOException;
+  void syncDataFiles(long segmentId, byte[] lastMetadata) throws IOException;
 
   void flushTillSegment(long segmentId);
 

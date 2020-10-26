@@ -961,7 +961,7 @@ public final class OWOWCache extends OAbstractWriteCache
   }
 
   @Override
-  public void makeFuzzyCheckpoint(final long segmentId, final byte[] lastMetadata)
+  public void syncDataFiles(final long segmentId, final byte[] lastMetadata)
       throws IOException {
     filesLock.acquireReadLock();
     try {
@@ -972,7 +972,6 @@ public final class OWOWCache extends OAbstractWriteCache
           return;
         }
 
-        writeAheadLog.logFuzzyCheckPointStart(startLSN);
         if (lastMetadata != null) {
           writeAheadLog.log(new MetaDataRecord(lastMetadata));
         }
@@ -994,7 +993,6 @@ public final class OWOWCache extends OAbstractWriteCache
           }
         }
 
-        writeAheadLog.logFuzzyCheckPointEnd();
         writeAheadLog.flush();
 
         writeAheadLog.cutAllSegmentsSmallerThan(segmentId);
