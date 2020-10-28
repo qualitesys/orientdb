@@ -272,7 +272,6 @@ public class SBTreeV2WALTestIT extends SBTreeV2TestIT {
             false,
             Locale.ENGLISH,
             -1,
-            -1,
             1_000,
             false,
             true,

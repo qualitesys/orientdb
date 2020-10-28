@@ -279,7 +279,6 @@ public class OLocalHashTableV3WALTestIT extends OLocalHashTableV3Base {
             false,
             Locale.ENGLISH,
             -1,
-            -1,
             1_000,
             false,
             true,

@@ -204,6 +204,7 @@ public enum OGlobalConfiguration { // ENVIRONMENT
       Boolean.class,
       true),
 
+  @Deprecated
   DISK_USE_NATIVE_OS_API(
       "storage.disk.useNativeOsAPI",
       "Allows to call native OS methods if possible",
@@ -528,7 +529,7 @@ public enum OGlobalConfiguration { // ENVIRONMENT
       "storage.wal.keepSingleSegment",
       "Database will provide the best efforts to keep only single WAL inside the storage",
       Boolean.class,
-      false),
+      true),
 
   @Deprecated
   WAL_ALLOW_DIRECT_IO(
@@ -649,6 +650,7 @@ public enum OGlobalConfiguration { // ENVIRONMENT
       Long.class,
       2 * 1024L * 1024 * 1024),
 
+  @Deprecated
   DISK_CACHE_FREE_SPACE_LIMIT(
       "storage.diskCache.diskFreeSpaceLimit",
       "Minimum amount of space on disk, which, when exceeded, "

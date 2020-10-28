@@ -23,7 +23,6 @@ package com.orientechnologies.orient.core.storage.cache;
 import com.orientechnologies.common.types.OModifiableBoolean;
 import com.orientechnologies.orient.core.command.OCommandOutputListener;
 import com.orientechnologies.orient.core.storage.cache.local.OBackgroundExceptionListener;
-import com.orientechnologies.orient.core.storage.impl.local.OLowDiskSpaceListener;
 import com.orientechnologies.orient.core.storage.impl.local.OPageIsBrokenListener;
 import com.orientechnologies.orient.core.storage.impl.local.paginated.wal.OLogSequenceNumber;
 import java.io.IOException;
@@ -37,10 +36,6 @@ public interface OWriteCache {
   /** Removes listener which is called by cache if corruption of file page is detected. */
   @SuppressWarnings("unused")
   void removePageIsBrokenListener(OPageIsBrokenListener listener);
-
-  void addLowDiskSpaceListener(OLowDiskSpaceListener listener);
-
-  void removeLowDiskSpaceListener(OLowDiskSpaceListener listener);
 
   long bookFileId(String fileName);
 
@@ -75,8 +70,6 @@ public interface OWriteCache {
    */
   long fileIdByName(String fileName);
 
-  boolean checkLowDiskSpace() throws IOException;
-
   void syncDataFiles(long segmentId, byte[] lastMetadata) throws IOException;
 
   void flushTillSegment(long segmentId);
@@ -93,7 +86,7 @@ public interface OWriteCache {
 
   void checkCacheOverflow() throws InterruptedException;
 
-  int allocateNewPage(final long fileId) throws IOException;
+  int allocateNewPage(final long fileId);
 
   OCachePointer load(
       long fileId, long startPageIndex, OModifiableBoolean cacheHit, boolean verifyChecksums)

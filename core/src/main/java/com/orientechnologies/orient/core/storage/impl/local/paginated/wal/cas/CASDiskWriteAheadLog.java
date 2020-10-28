@@ -12,7 +12,6 @@ import com.orientechnologies.common.serialization.types.OLongSerializer;
 import com.orientechnologies.common.thread.OScheduledThreadPoolExecutorWithLogging;
 import com.orientechnologies.common.thread.OThreadPoolExecutorWithLogging;
 import com.orientechnologies.common.types.OModifiableLong;
-import com.orientechnologies.common.util.OPair;
 import com.orientechnologies.common.util.OUncaughtExceptionHandler;
 import com.orientechnologies.orient.core.exception.EncryptionKeyIsAbsentException;
 import com.orientechnologies.orient.core.exception.OInvalidStorageEncryptionKeyException;
@@ -20,8 +19,6 @@ import com.orientechnologies.orient.core.exception.OSecurityException;
 import com.orientechnologies.orient.core.exception.OStorageException;
 import com.orientechnologies.orient.core.storage.OStorageAbstract;
 import com.orientechnologies.orient.core.storage.impl.local.OCheckpointRequestListener;
-import com.orientechnologies.orient.core.storage.impl.local.OLowDiskSpaceInformation;
-import com.orientechnologies.orient.core.storage.impl.local.OLowDiskSpaceListener;
 import com.orientechnologies.orient.core.storage.impl.local.paginated.atomicoperations.OAtomicOperationMetadata;
 import com.orientechnologies.orient.core.storage.impl.local.paginated.wal.OAtomicUnitEndRecord;
 import com.orientechnologies.orient.core.storage.impl.local.paginated.wal.OAtomicUnitStartMetadataRecord;
@@ -43,7 +40,6 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.channels.FileChannel;
-import java.nio.file.FileStore;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
@@ -136,21 +132,16 @@ public final class CASDiskWriteAheadLog implements OWriteAheadLog {
 
   private final boolean keepSingleWALSegment;
 
-  private final long walSizeHardLimit;
-
-  private final List<OLowDiskSpaceListener> lowDiskSpaceListeners = new CopyOnWriteArrayList<>();
   private final List<OCheckpointRequestListener> fullCheckpointListeners =
       new CopyOnWriteArrayList<>();
   private final List<SegmentOverflowListener> segmentOverflowListeners =
       new CopyOnWriteArrayList<>();
 
-  private volatile long walSizeLimit;
+  private final long walSizeLimit;
 
   private final long segmentsInterval;
 
   private final long maxSegmentSize;
-
-  private final long freeSpaceLimit;
 
   private final MPSCFAAArrayDequeue<OWALRecord> records = new MPSCFAAArrayDequeue<>();
 
@@ -165,7 +156,6 @@ public final class CASDiskWriteAheadLog implements OWriteAheadLog {
   private final AtomicReference<OLogSequenceNumber> end = new AtomicReference<>();
   private final ConcurrentSkipListSet<Long> segments = new ConcurrentSkipListSet<>();
 
-  private final FileStore fileStore;
   private final Path walLocation;
   private final String storageName;
 
@@ -253,7 +243,6 @@ public final class CASDiskWriteAheadLog implements OWriteAheadLog {
       final boolean filterWALFiles,
       final Locale locale,
       final long walSizeHardLimit,
-      final long freeSpaceLimit,
       final int fsyncInterval,
       boolean keepSingleWALSegment,
       boolean callFsync,
@@ -282,8 +271,6 @@ public final class CASDiskWriteAheadLog implements OWriteAheadLog {
     this.statisticPrintInterval = statisticPrintInterval;
 
     this.fsyncInterval = fsyncInterval;
-    this.walSizeHardLimit = walSizeHardLimit;
-    this.freeSpaceLimit = freeSpaceLimit;
 
     walSizeLimit = walSizeHardLimit;
 
@@ -293,7 +280,6 @@ public final class CASDiskWriteAheadLog implements OWriteAheadLog {
       Files.createDirectories(walLocation);
     }
 
-    this.fileStore = Files.getFileStore(walLocation);
     this.storageName = storageName;
 
     pageSize = CASWALPage.DEFAULT_PAGE_SIZE;
@@ -1446,41 +1432,6 @@ public final class CASDiskWriteAheadLog implements OWriteAheadLog {
     }
   }
 
-  private void checkFreeSpace() throws IOException {
-    final long freeSpace = fileStore.getUsableSpace();
-
-    // system has unlimited amount of free space
-    if (freeSpace < 0) return;
-
-    if (walSizeHardLimit < 0 && freeSpace > freeSpaceLimit) {
-      // (free space occupied by WAL + the rest of free space) / 2
-      // so if WAL is empty we will consume half of free space provided to database
-      walSizeLimit = (logSize.get() + freeSpace) / 2;
-    }
-
-    if (freeSpace < freeSpaceLimit) {
-      for (final OLowDiskSpaceListener listener : lowDiskSpaceListeners) {
-        listener.lowDiskSpace(new OLowDiskSpaceInformation(freeSpace, freeSpaceLimit));
-      }
-    }
-  }
-
-  public void addLowDiskSpaceListener(final OLowDiskSpaceListener listener) {
-    lowDiskSpaceListeners.add(listener);
-  }
-
-  public void removeLowDiskSpaceListener(final OLowDiskSpaceListener listener) {
-    final List<OLowDiskSpaceListener> itemsToRemove = new ArrayList<>();
-
-    for (final OLowDiskSpaceListener lowDiskSpaceListener : lowDiskSpaceListeners) {
-      if (lowDiskSpaceListener.equals(listener)) {
-        itemsToRemove.add(lowDiskSpaceListener);
-      }
-    }
-
-    lowDiskSpaceListeners.removeAll(itemsToRemove);
-  }
-
   public void addFullCheckpointListener(final OCheckpointRequestListener listener) {
     fullCheckpointListeners.add(listener);
   }
@@ -2116,8 +2067,6 @@ public final class CASDiskWriteAheadLog implements OWriteAheadLog {
                           syncFile(file);
                           return null;
                         });
-
-            checkFreeSpace();
           } finally {
             lastFSyncTs = ts;
           }

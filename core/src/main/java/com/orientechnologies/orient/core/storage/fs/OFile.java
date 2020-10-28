@@ -10,7 +10,7 @@ import java.util.List;
 public interface OFile extends OClosableItem {
   int HEADER_SIZE = 1024;
 
-  long allocateSpace(int size) throws IOException;
+  long allocateSpace(int size);
 
   void shrink(long size) throws IOException;
 

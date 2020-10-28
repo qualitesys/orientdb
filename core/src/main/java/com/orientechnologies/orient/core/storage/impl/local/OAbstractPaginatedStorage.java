@@ -217,12 +217,11 @@ import java.util.zip.ZipOutputStream;
  * @since 28.03.13
  */
 public abstract class OAbstractPaginatedStorage extends OStorageAbstract
-    implements OLowDiskSpaceListener,
-        OCheckpointRequestListener,
-        OIdentifiableStorage,
-        OBackgroundExceptionListener,
-        OFreezableStorageComponent,
-        OPageIsBrokenListener {
+    implements OCheckpointRequestListener,
+    OIdentifiableStorage,
+    OBackgroundExceptionListener,
+    OFreezableStorageComponent,
+    OPageIsBrokenListener {
   private static final int WAL_RESTORE_REPORT_INTERVAL = 30 * 1000; // milliseconds
 
   private static final Comparator<ORecordOperation> COMMIT_RECORD_OPERATION_COMPARATOR =
@@ -266,7 +265,6 @@ public abstract class OAbstractPaginatedStorage extends OStorageAbstract
   private volatile int defaultClusterId = -1;
   protected volatile OAtomicOperationsManager atomicOperationsManager;
   private volatile boolean wereNonTxOperationsPerformedInPreviousOpen;
-  private volatile OLowDiskSpaceInformation lowDiskSpace;
   private volatile boolean modificationLock;
   private volatile boolean readLock;
   /** Set of pages which were detected as broken and need to be repaired. */
@@ -987,7 +985,7 @@ public abstract class OAbstractPaginatedStorage extends OStorageAbstract
   public final int addCluster(final String clusterName, final Object... parameters) {
     try {
       checkOpenness();
-      checkLowDiskSpaceRequestsAndReadOnlyConditions();
+      checkReadOnlyConditions();
 
       stateLock.acquireWriteLock();
       try {
@@ -1017,7 +1015,7 @@ public abstract class OAbstractPaginatedStorage extends OStorageAbstract
   public final int addCluster(final String clusterName, final int requestedId) {
     try {
       checkOpenness();
-      checkLowDiskSpaceRequestsAndReadOnlyConditions();
+      checkReadOnlyConditions();
       stateLock.acquireWriteLock();
       try {
         checkOpenness();
@@ -1058,7 +1056,7 @@ public abstract class OAbstractPaginatedStorage extends OStorageAbstract
   public final boolean dropCluster(final int clusterId) {
     try {
       checkOpenness();
-      checkLowDiskSpaceRequestsAndReadOnlyConditions();
+      checkReadOnlyConditions();
 
       stateLock.acquireWriteLock();
       try {
@@ -1123,7 +1121,7 @@ public abstract class OAbstractPaginatedStorage extends OStorageAbstract
   public String getClusterNameById(int clusterId) {
     try {
       checkOpenness();
-      checkLowDiskSpaceRequestsAndReadOnlyConditions();
+      checkReadOnlyConditions();
 
       stateLock.acquireReadLock();
       try {
@@ -1154,7 +1152,7 @@ public abstract class OAbstractPaginatedStorage extends OStorageAbstract
   public long getClusterRecordsSizeById(int clusterId) {
     try {
       checkOpenness();
-      checkLowDiskSpaceRequestsAndReadOnlyConditions();
+      checkReadOnlyConditions();
 
       stateLock.acquireReadLock();
       try {
@@ -1186,7 +1184,7 @@ public abstract class OAbstractPaginatedStorage extends OStorageAbstract
 
     try {
       checkOpenness();
-      checkLowDiskSpaceRequestsAndReadOnlyConditions();
+      checkReadOnlyConditions();
 
       stateLock.acquireReadLock();
       try {
@@ -1216,7 +1214,7 @@ public abstract class OAbstractPaginatedStorage extends OStorageAbstract
   public String getClusterRecordConflictStrategy(int clusterId) {
     try {
       checkOpenness();
-      checkLowDiskSpaceRequestsAndReadOnlyConditions();
+      checkReadOnlyConditions();
 
       stateLock.acquireReadLock();
       try {
@@ -1248,7 +1246,7 @@ public abstract class OAbstractPaginatedStorage extends OStorageAbstract
   public String getClusterEncryption(int clusterId) {
     try {
       checkOpenness();
-      checkLowDiskSpaceRequestsAndReadOnlyConditions();
+      checkReadOnlyConditions();
 
       stateLock.acquireReadLock();
       try {
@@ -1306,7 +1304,7 @@ public abstract class OAbstractPaginatedStorage extends OStorageAbstract
   public long getLastClusterPosition(int clusterId) {
     try {
       checkOpenness();
-      checkLowDiskSpaceRequestsAndReadOnlyConditions();
+      checkReadOnlyConditions();
 
       stateLock.acquireReadLock();
       try {
@@ -1336,7 +1334,7 @@ public abstract class OAbstractPaginatedStorage extends OStorageAbstract
   public long getClusterNextPosition(int clusterId) {
     try {
       checkOpenness();
-      checkLowDiskSpaceRequestsAndReadOnlyConditions();
+      checkReadOnlyConditions();
 
       stateLock.acquireReadLock();
       try {
@@ -1366,7 +1364,7 @@ public abstract class OAbstractPaginatedStorage extends OStorageAbstract
   public OPaginatedCluster.RECORD_STATUS getRecordStatus(ORID rid) {
     try {
       checkOpenness();
-      checkLowDiskSpaceRequestsAndReadOnlyConditions();
+      checkReadOnlyConditions();
 
       stateLock.acquireReadLock();
       try {
@@ -1764,7 +1762,7 @@ public abstract class OAbstractPaginatedStorage extends OStorageAbstract
       checkOpenness();
       checkIfThreadIsBlocked();
 
-      checkLowDiskSpaceRequestsAndReadOnlyConditions();
+      checkReadOnlyConditions();
 
       final OCluster cluster = doGetAndCheckCluster(rid.getClusterId());
       if (transaction.get() != null) {
@@ -2014,7 +2012,7 @@ public abstract class OAbstractPaginatedStorage extends OStorageAbstract
           checkOpenness();
           checkIfThreadIsBlocked();
 
-          checkLowDiskSpaceRequestsAndReadOnlyConditions();
+          checkReadOnlyConditions();
 
           final OCluster cluster = doGetAndCheckCluster(rid.getClusterId());
           return atomicOperationsManager.calculateInsideAtomicOperation(
@@ -2075,7 +2073,7 @@ public abstract class OAbstractPaginatedStorage extends OStorageAbstract
         checkOpenness();
         checkIfThreadIsBlocked();
 
-        checkLowDiskSpaceRequestsAndReadOnlyConditions();
+        checkReadOnlyConditions();
 
         final OCluster cluster = doGetAndCheckCluster(rid.getClusterId());
 
@@ -2163,7 +2161,7 @@ public abstract class OAbstractPaginatedStorage extends OStorageAbstract
   public void preallocateRids(final OTransactionInternal clientTx) {
     try {
       checkOpenness();
-      checkLowDiskSpaceRequestsAndReadOnlyConditions();
+      checkReadOnlyConditions();
 
       final Iterable<ORecordOperation> entries = clientTx.getRecordOperations();
       final TreeMap<Integer, OCluster> clustersToLock = new TreeMap<>();
@@ -2374,7 +2372,7 @@ public abstract class OAbstractPaginatedStorage extends OStorageAbstract
         }
         try {
           checkOpenness();
-          checkLowDiskSpaceRequestsAndReadOnlyConditions();
+          checkReadOnlyConditions();
 
           checkIfThreadIsBlocked();
 
@@ -2624,7 +2622,7 @@ public abstract class OAbstractPaginatedStorage extends OStorageAbstract
         checkOpenness();
         checkIfThreadIsBlocked();
 
-        checkLowDiskSpaceRequestsAndReadOnlyConditions();
+        checkReadOnlyConditions();
 
         // this method introduced for binary compatibility only
         if (configuration.getBinaryFormatVersion() > 15) {
@@ -2751,7 +2749,7 @@ public abstract class OAbstractPaginatedStorage extends OStorageAbstract
         checkOpenness();
         checkIfThreadIsBlocked();
 
-        checkLowDiskSpaceRequestsAndReadOnlyConditions();
+        checkReadOnlyConditions();
 
         makeStorageDirty();
         return atomicOperationsManager.calculateInsideAtomicOperation(
@@ -3010,7 +3008,7 @@ public abstract class OAbstractPaginatedStorage extends OStorageAbstract
         checkOpenness();
         checkIfThreadIsBlocked();
 
-        checkLowDiskSpaceRequestsAndReadOnlyConditions();
+        checkReadOnlyConditions();
 
         checkIndexId(internalIndexId);
 
@@ -3094,7 +3092,7 @@ public abstract class OAbstractPaginatedStorage extends OStorageAbstract
         checkOpenness();
         checkIfThreadIsBlocked();
 
-        checkLowDiskSpaceRequestsAndReadOnlyConditions();
+        checkReadOnlyConditions();
 
         return atomicOperationsManager.calculateInsideAtomicOperation(
             null,
@@ -3156,7 +3154,7 @@ public abstract class OAbstractPaginatedStorage extends OStorageAbstract
         checkOpenness();
         checkIfThreadIsBlocked();
 
-        checkLowDiskSpaceRequestsAndReadOnlyConditions();
+        checkReadOnlyConditions();
 
         atomicOperationsManager.executeInsideAtomicOperation(
             null, atomicOperation -> doClearIndex(atomicOperation, internalIndexId));
@@ -3335,7 +3333,7 @@ public abstract class OAbstractPaginatedStorage extends OStorageAbstract
         checkOpenness();
         checkIfThreadIsBlocked();
 
-        checkLowDiskSpaceRequestsAndReadOnlyConditions();
+        checkReadOnlyConditions();
         atomicOperationsManager.executeInsideAtomicOperation(
             null,
             atomicOperation ->
@@ -3437,7 +3435,7 @@ public abstract class OAbstractPaginatedStorage extends OStorageAbstract
         checkOpenness();
         checkIfThreadIsBlocked();
 
-        checkLowDiskSpaceRequestsAndReadOnlyConditions();
+        checkReadOnlyConditions();
 
         atomicOperationsManager.executeInsideAtomicOperation(
             null,
@@ -3501,7 +3499,7 @@ public abstract class OAbstractPaginatedStorage extends OStorageAbstract
         checkOpenness();
         checkIfThreadIsBlocked();
 
-        checkLowDiskSpaceRequestsAndReadOnlyConditions();
+        checkReadOnlyConditions();
 
         return atomicOperationsManager.calculateInsideAtomicOperation(
             null,
@@ -3566,7 +3564,7 @@ public abstract class OAbstractPaginatedStorage extends OStorageAbstract
         checkOpenness();
         checkIfThreadIsBlocked();
 
-        checkLowDiskSpaceRequestsAndReadOnlyConditions();
+        checkReadOnlyConditions();
 
         atomicOperationsManager.executeInsideAtomicOperation(
             null,
@@ -3639,7 +3637,7 @@ public abstract class OAbstractPaginatedStorage extends OStorageAbstract
         checkOpenness();
         checkIfThreadIsBlocked();
 
-        checkLowDiskSpaceRequestsAndReadOnlyConditions();
+        checkReadOnlyConditions();
 
         return atomicOperationsManager.calculateInsideAtomicOperation(
             null,
@@ -4427,10 +4425,6 @@ public abstract class OAbstractPaginatedStorage extends OStorageAbstract
     return mode;
   }
 
-  @Override
-  public final void lowDiskSpace(final OLowDiskSpaceInformation information) {
-    lowDiskSpace = information;
-  }
 
   /** @inheritDoc */
   @Override
@@ -4932,7 +4926,7 @@ public abstract class OAbstractPaginatedStorage extends OStorageAbstract
   public void rollbackOperationsFromThread(final Thread thread) {
     try {
       checkOpenness();
-      checkLowDiskSpaceRequestsAndReadOnlyConditions();
+      checkReadOnlyConditions();
       stateLock.acquireWriteLock();
       try {
         checkOpenness();
@@ -5039,7 +5033,7 @@ public abstract class OAbstractPaginatedStorage extends OStorageAbstract
   public void tryToDeleteTreeRidBag(final OSBTreeRidBag ridBag) {
     try {
       checkOpenness();
-      checkLowDiskSpaceRequestsAndReadOnlyConditions();
+      checkReadOnlyConditions();
 
       if (transaction.get() == null) {
         stateLock.acquireWriteLock();
@@ -5076,7 +5070,7 @@ public abstract class OAbstractPaginatedStorage extends OStorageAbstract
           @Override
           public void run() {
             checkOpenness();
-            checkLowDiskSpaceRequestsAndReadOnlyConditions();
+            checkReadOnlyConditions();
 
             stateLock.acquireWriteLock();
             try {
@@ -5754,7 +5748,7 @@ public abstract class OAbstractPaginatedStorage extends OStorageAbstract
       checkOpenness();
       checkIfThreadIsBlocked();
 
-      checkLowDiskSpaceRequestsAndReadOnlyConditions();
+      checkReadOnlyConditions();
 
       stateLock.acquireWriteLock();
       try {
@@ -5921,13 +5915,11 @@ public abstract class OAbstractPaginatedStorage extends OStorageAbstract
         super.close(force, onDelete);
 
         if (writeCache != null) {
-          writeCache.removeLowDiskSpaceListener(this);
           writeCache.removeBackgroundExceptionListener(this);
           writeCache.removePageIsBrokenListener(this);
         }
 
         writeAheadLog.removeFullCheckpointListener(this);
-        writeAheadLog.removeLowDiskSpaceListener(this);
 
         if (readCache != null) {
           if (!onDelete) {
@@ -6232,9 +6224,11 @@ public abstract class OAbstractPaginatedStorage extends OStorageAbstract
       firstLSN = firstRecord.getLsn();
 
       if (walOperationId != lsnOperationId.operationId + 1) {
-        OLogManager.instance().errorNoDb(this,
-            "WAL does not contain all data which are needed to restore broken database !!!",
-            null);
+        OLogManager.instance()
+            .errorNoDb(
+                this,
+                "WAL does not contain all data which are needed to restore broken database !!!",
+                null);
 
         return restoreFromBeginning();
       }
@@ -6569,69 +6563,6 @@ public abstract class OAbstractPaginatedStorage extends OStorageAbstract
         assert false : "Invalid WAL record type was passed " + walRecord.getClass().getName();
       }
     }
-  }
-
-  /**
-   * Method which is called before any data modification operation to check alarm conditions such
-   * as:
-   *
-   * <ol>
-   *   <li>Low disk space
-   *   <li>Exception during data flush in background threads
-   *   <li>Broken files
-   * </ol>
-   *
-   * If one of those conditions are satisfied data modification operation is aborted and storage is
-   * switched in "read only" mode.
-   */
-  private void checkLowDiskSpaceRequestsAndReadOnlyConditions() {
-    if (transaction.get() != null) {
-      return;
-    }
-
-    if (lowDiskSpace != null) {
-      if (checkpointInProgress.compareAndSet(false, true)) {
-        try {
-          if (writeCache.checkLowDiskSpace()) {
-
-            OLogManager.instance()
-                .error(this, "Not enough disk space, force sync will be called", null);
-            synch();
-
-            if (writeCache.checkLowDiskSpace()) {
-              throw new OLowDiskSpaceException(
-                  "Error occurred while executing a write operation to database '"
-                      + name
-                      + "' due to limited free space on the disk ("
-                      + (lowDiskSpace.freeSpace / (1024 * 1024))
-                      + " MB). The database is now working in read-only mode."
-                      + " Please close the database (or stop OrientDB), make room on your hard drive and then reopen the database. "
-                      + "The minimal required space is "
-                      + (lowDiskSpace.requiredSpace / (1024 * 1024))
-                      + " MB. "
-                      + "Required space is now set to "
-                      + configuration
-                          .getContextConfiguration()
-                          .getValueAsInteger(OGlobalConfiguration.DISK_CACHE_FREE_SPACE_LIMIT)
-                      + "MB (you can change it by setting parameter "
-                      + OGlobalConfiguration.DISK_CACHE_FREE_SPACE_LIMIT.getKey()
-                      + ") .");
-            } else {
-              lowDiskSpace = null;
-            }
-          } else {
-            lowDiskSpace = null;
-          }
-        } catch (final IOException e) {
-          throw OException.wrapException(
-              new OStorageException("Error during low disk space handling"), e);
-        } finally {
-          checkpointInProgress.set(false);
-        }
-      }
-    }
-
-    checkReadOnlyConditions();
   }
 
   public final void checkReadOnlyConditions() {

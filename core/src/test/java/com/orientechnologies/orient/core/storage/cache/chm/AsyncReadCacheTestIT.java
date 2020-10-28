@@ -10,7 +10,6 @@ import com.orientechnologies.orient.core.storage.cache.OCachePointer;
 import com.orientechnologies.orient.core.storage.cache.OPageDataVerificationError;
 import com.orientechnologies.orient.core.storage.cache.OWriteCache;
 import com.orientechnologies.orient.core.storage.cache.local.OBackgroundExceptionListener;
-import com.orientechnologies.orient.core.storage.impl.local.OLowDiskSpaceListener;
 import com.orientechnologies.orient.core.storage.impl.local.OPageIsBrokenListener;
 import com.orientechnologies.orient.core.storage.impl.local.paginated.wal.OLogSequenceNumber;
 import java.io.IOException;
@@ -352,12 +351,6 @@ public class AsyncReadCacheTestIT {
     public void removePageIsBrokenListener(final OPageIsBrokenListener listener) {}
 
     @Override
-    public void addLowDiskSpaceListener(final OLowDiskSpaceListener listener) {}
-
-    @Override
-    public void removeLowDiskSpaceListener(final OLowDiskSpaceListener listener) {}
-
-    @Override
     public long bookFileId(final String fileName) {
       return 0;
     }
@@ -380,11 +373,6 @@ public class AsyncReadCacheTestIT {
     @Override
     public long fileIdByName(final String fileName) {
       return 0;
-    }
-
-    @Override
-    public boolean checkLowDiskSpace() {
-      return false;
     }
 
     @Override

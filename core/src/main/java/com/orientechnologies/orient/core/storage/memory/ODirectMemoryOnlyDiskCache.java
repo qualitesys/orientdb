@@ -34,7 +34,6 @@ import com.orientechnologies.orient.core.storage.cache.OPageDataVerificationErro
 import com.orientechnologies.orient.core.storage.cache.OReadCache;
 import com.orientechnologies.orient.core.storage.cache.OWriteCache;
 import com.orientechnologies.orient.core.storage.cache.local.OBackgroundExceptionListener;
-import com.orientechnologies.orient.core.storage.impl.local.OLowDiskSpaceListener;
 import com.orientechnologies.orient.core.storage.impl.local.OPageIsBrokenListener;
 import com.orientechnologies.orient.core.storage.impl.local.paginated.wal.OLogSequenceNumber;
 import java.nio.file.Path;
@@ -577,11 +576,6 @@ public final class ODirectMemoryOnlyDiskCache extends OAbstractWriteCache
     return totalPages * pageSize;
   }
 
-  @Override
-  public final boolean checkLowDiskSpace() {
-    return true;
-  }
-
   /** Not implemented because has no sense */
   @Override
   public final void addPageIsBrokenListener(final OPageIsBrokenListener listener) {}
@@ -589,12 +583,6 @@ public final class ODirectMemoryOnlyDiskCache extends OAbstractWriteCache
   /** Not implemented because has no sense */
   @Override
   public final void removePageIsBrokenListener(final OPageIsBrokenListener listener) {}
-
-  @Override
-  public final void addLowDiskSpaceListener(final OLowDiskSpaceListener listener) {}
-
-  @Override
-  public final void removeLowDiskSpaceListener(final OLowDiskSpaceListener listener) {}
 
   @Override
   public final long loadFile(final String fileName) {
