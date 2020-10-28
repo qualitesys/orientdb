@@ -30,10 +30,7 @@ import com.orientechnologies.orient.core.db.document.RecordReader;
 import com.orientechnologies.orient.core.db.document.SimpleRecordReader;
 import com.orientechnologies.orient.core.db.record.OIdentifiable;
 import com.orientechnologies.orient.core.db.record.ORecordOperation;
-import com.orientechnologies.orient.core.exception.ODatabaseException;
-import com.orientechnologies.orient.core.exception.ORecordNotFoundException;
-import com.orientechnologies.orient.core.exception.OStorageException;
-import com.orientechnologies.orient.core.exception.OTransactionException;
+import com.orientechnologies.orient.core.exception.*;
 import com.orientechnologies.orient.core.hook.ORecordHook.TYPE;
 import com.orientechnologies.orient.core.id.ORID;
 import com.orientechnologies.orient.core.id.ORecordId;
@@ -185,6 +182,9 @@ public class OTransactionOptimistic extends OTransactionRealAbstract {
       final OStorage.LOCKING_STRATEGY lockingStrategy) {
     checkTransaction();
 
+    if (database.isInterruptingCommand()) {
+      throw new OCommandInterruptedException("Command interrupted");
+    }
     final ORecord txRecord = getRecord(rid);
     if (txRecord == OBasicTransaction.DELETED_RECORD)
       // DELETED IN TX

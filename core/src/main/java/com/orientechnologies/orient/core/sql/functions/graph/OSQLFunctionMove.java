@@ -6,7 +6,9 @@ import com.orientechnologies.common.util.OCallable;
 import com.orientechnologies.orient.core.command.OCommandContext;
 import com.orientechnologies.orient.core.db.ODatabase;
 import com.orientechnologies.orient.core.db.ODatabaseRecordThreadLocal;
+import com.orientechnologies.orient.core.db.document.ODatabaseDocumentEmbedded;
 import com.orientechnologies.orient.core.db.record.OIdentifiable;
+import com.orientechnologies.orient.core.exception.OCommandInterruptedException;
 import com.orientechnologies.orient.core.record.ODirection;
 import com.orientechnologies.orient.core.record.OElement;
 import com.orientechnologies.orient.core.sql.OSQLEngine;
@@ -44,6 +46,11 @@ public abstract class OSQLFunctionMove extends OSQLFunctionConfigurableAbstract 
         iContext != null
             ? iContext.getDatabase()
             : ODatabaseRecordThreadLocal.instance().getIfDefined();
+
+    if (db instanceof ODatabaseDocumentEmbedded
+        && ((ODatabaseDocumentEmbedded) db).isInterruptingCommand()) {
+      throw new OCommandInterruptedException("Command interrupted");
+    }
 
     final String[] labels;
     if (iParameters != null && iParameters.length > 0 && iParameters[0] != null)
