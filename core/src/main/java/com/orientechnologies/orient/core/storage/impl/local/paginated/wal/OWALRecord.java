@@ -36,4 +36,8 @@ public interface OWALRecord {
   int getDistance();
 
   int getDiskSize();
+
+  void setOperationId(int operationId);
+
+  int getOperationId();
 }

@@ -21,6 +21,7 @@
 package com.orientechnologies.orient.core.storage.index.sbtreebonsai.local;
 
 import com.orientechnologies.common.serialization.types.OByteSerializer;
+import com.orientechnologies.common.serialization.types.OIntegerSerializer;
 import com.orientechnologies.common.serialization.types.OLongSerializer;
 import com.orientechnologies.orient.core.storage.cache.OCacheEntry;
 import java.io.IOException;
@@ -39,7 +40,8 @@ import java.io.IOException;
  * @author Artem Orobets (enisher-at-gmail.com)
  */
 public final class OSysBucket extends OBonsaiBucketAbstract {
-  private static final int SYS_MAGIC_OFFSET = WAL_POSITION_OFFSET + OLongSerializer.LONG_SIZE;
+
+  private static final int SYS_MAGIC_OFFSET = WAL_OPERATION_ID_OFFSET + OIntegerSerializer.INT_SIZE;
   private static final int FREE_SPACE_OFFSET = SYS_MAGIC_OFFSET + OByteSerializer.BYTE_SIZE;
   private static final int FREE_LIST_HEAD_OFFSET = FREE_SPACE_OFFSET + OBonsaiBucketPointer.SIZE;
   private static final int FREE_LIST_LENGTH_OFFSET =

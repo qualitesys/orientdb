@@ -19,8 +19,6 @@ import com.orientechnologies.orient.core.storage.impl.local.paginated.base.ODura
 import com.orientechnologies.orient.core.storage.impl.local.paginated.wal.OAtomicUnitEndRecord;
 import com.orientechnologies.orient.core.storage.impl.local.paginated.wal.OAtomicUnitStartRecord;
 import com.orientechnologies.orient.core.storage.impl.local.paginated.wal.OFileCreatedWALRecord;
-import com.orientechnologies.orient.core.storage.impl.local.paginated.wal.OFuzzyCheckpointEndRecord;
-import com.orientechnologies.orient.core.storage.impl.local.paginated.wal.OFuzzyCheckpointStartRecord;
 import com.orientechnologies.orient.core.storage.impl.local.paginated.wal.OLogSequenceNumber;
 import com.orientechnologies.orient.core.storage.impl.local.paginated.wal.ONonTxOperationPerformedWALRecord;
 import com.orientechnologies.orient.core.storage.impl.local.paginated.wal.OOperationUnitBodyRecord;
@@ -343,7 +341,8 @@ public class SBTreeV2WALTestIT extends SBTreeV2TestIT {
               try {
                 ODurablePage durablePage = new ODurablePage(cacheEntry);
                 durablePage.restoreChanges(updatePageRecord.getChanges());
-                durablePage.setLsn(new OLogSequenceNumber(0, 0));
+                durablePage.setLsnAndOperationId(
+                    updatePageRecord.getLsn(), updatePageRecord.getOperationId());
               } finally {
                 expectedReadCache.releaseFromWrite(cacheEntry, expectedWriteCache, true);
               }
@@ -355,9 +354,7 @@ public class SBTreeV2WALTestIT extends SBTreeV2TestIT {
               "WAL record type is " + walRecord.getClass().getName(),
               walRecord instanceof OUpdatePageRecord
                   || walRecord instanceof ONonTxOperationPerformedWALRecord
-                  || walRecord instanceof OFileCreatedWALRecord
-                  || walRecord instanceof OFuzzyCheckpointStartRecord
-                  || walRecord instanceof OFuzzyCheckpointEndRecord);
+                  || walRecord instanceof OFileCreatedWALRecord);
         }
       }
 

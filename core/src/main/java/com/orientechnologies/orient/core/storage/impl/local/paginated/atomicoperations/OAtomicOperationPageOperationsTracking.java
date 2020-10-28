@@ -91,6 +91,7 @@ final class OAtomicOperationPageOperationsTracking implements OAtomicOperation {
     final List<PageOperationRecord> pageOperationRecords = cacheEntry.getPageOperations();
 
     OLogSequenceNumber lastLSN = null;
+    int lastOperationsId = -1;
     for (final PageOperationRecord pageOperationRecord : pageOperationRecords) {
       pageOperationRecord.setOperationUnitId(operationUnitId);
       pageOperationRecord.setFileId(cacheEntry.getFileId());
@@ -102,6 +103,8 @@ final class OAtomicOperationPageOperationsTracking implements OAtomicOperation {
       sizeSerializedOperations += pageOperationRecord.serializedSize();
       lastLSN = lsn;
 
+      lastOperationsId = pageOperationRecord.getOperationId();
+
       if (sizeSerializedOperations <= operationsCacheLimit) {
         pageOperationCache.add(pageOperationRecord);
       } else {
@@ -110,7 +113,7 @@ final class OAtomicOperationPageOperationsTracking implements OAtomicOperation {
     }
 
     if (lastLSN != null) {
-      ODurablePage.setPageLSN(lastLSN, cacheEntry);
+      ODurablePage.setPageLSNAndOperationId(lastLSN, lastOperationsId, cacheEntry);
       cacheEntry.setEndLSN(lastLSN);
     }
 
@@ -271,6 +274,8 @@ final class OAtomicOperationPageOperationsTracking implements OAtomicOperation {
 
   private void revertPageOperation(PageOperationRecord pageOperationRecord) throws IOException {
     OLogSequenceNumber lastLSN = null;
+    int lastOperationId = -1;
+
     final OCacheEntry cacheEntry =
         readCache.loadForWrite(
             pageOperationRecord.getFileId(),
@@ -290,10 +295,11 @@ final class OAtomicOperationPageOperationsTracking implements OAtomicOperation {
         rollbackOperationRecord.setPageIndex(cacheEntry.getPageIndex());
 
         lastLSN = writeAheadLog.log(rollbackOperationRecord);
+        lastOperationId = rollbackOperationRecord.getOperationId();
       }
 
       if (lastLSN != null) {
-        ODurablePage.setPageLSN(lastLSN, cacheEntry);
+        ODurablePage.setPageLSNAndOperationId(lastLSN, lastOperationId, cacheEntry);
         cacheEntry.setEndLSN(lastLSN);
       }
     } finally {

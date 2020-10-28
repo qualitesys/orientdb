@@ -28,14 +28,15 @@ import java.io.File;
 import java.io.IOException;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * @author Andrey Lomakin (a.lomakin-at-orientdb.com)
  * @since 6/25/14
  */
 public class OMemoryWriteAheadLog extends OAbstractWriteAheadLog {
-  private final AtomicLong nextPosition = new AtomicLong();
+
+  private final AtomicInteger nextPosition = new AtomicInteger();
 
   @Override
   public OLogSequenceNumber begin() {
@@ -74,7 +75,8 @@ public class OMemoryWriteAheadLog extends OAbstractWriteAheadLog {
 
   @Override
   public OLogSequenceNumber log(WriteableWALRecord record) {
-    return new OLogSequenceNumber(0, nextPosition.incrementAndGet());
+    record.setOperationId(nextPosition.incrementAndGet());
+    return new OLogSequenceNumber(0, nextPosition.get());
   }
 
   @Override

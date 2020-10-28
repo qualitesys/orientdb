@@ -1,9 +1,11 @@
 package com.orientechnologies.orient.core.storage.impl.local.paginated.wal.cas;
 
+import com.orientechnologies.common.concur.lock.OInterruptedException;
 import com.orientechnologies.common.concur.lock.ScalableRWLock;
 import com.orientechnologies.common.directmemory.ODirectMemoryAllocator;
 import com.orientechnologies.common.directmemory.OPointer;
 import com.orientechnologies.common.exception.OException;
+import com.orientechnologies.common.io.OIOUtils;
 import com.orientechnologies.common.log.OLogManager;
 import com.orientechnologies.common.serialization.types.OIntegerSerializer;
 import com.orientechnologies.common.serialization.types.OLongSerializer;
@@ -12,6 +14,7 @@ import com.orientechnologies.common.thread.OThreadPoolExecutorWithLogging;
 import com.orientechnologies.common.types.OModifiableLong;
 import com.orientechnologies.common.util.OPair;
 import com.orientechnologies.common.util.OUncaughtExceptionHandler;
+import com.orientechnologies.orient.core.exception.EncryptionKeyIsAbsentException;
 import com.orientechnologies.orient.core.exception.OInvalidStorageEncryptionKeyException;
 import com.orientechnologies.orient.core.exception.OSecurityException;
 import com.orientechnologies.orient.core.exception.OStorageException;
@@ -23,7 +26,6 @@ import com.orientechnologies.orient.core.storage.impl.local.paginated.atomicoper
 import com.orientechnologies.orient.core.storage.impl.local.paginated.wal.OAtomicUnitEndRecord;
 import com.orientechnologies.orient.core.storage.impl.local.paginated.wal.OAtomicUnitStartMetadataRecord;
 import com.orientechnologies.orient.core.storage.impl.local.paginated.wal.OAtomicUnitStartRecord;
-import com.orientechnologies.orient.core.storage.impl.local.paginated.wal.OCheckpointEndRecord;
 import com.orientechnologies.orient.core.storage.impl.local.paginated.wal.OLogSequenceNumber;
 import com.orientechnologies.orient.core.storage.impl.local.paginated.wal.OWALRecord;
 import com.orientechnologies.orient.core.storage.impl.local.paginated.wal.OWALRecordsFactory;
@@ -40,9 +42,11 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
+import java.nio.channels.FileChannel;
 import java.nio.file.FileStore;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.security.InvalidAlgorithmParameterException;
 import java.security.InvalidKeyException;
@@ -57,8 +61,6 @@ import java.util.Map;
 import java.util.NavigableSet;
 import java.util.TreeMap;
 import java.util.concurrent.Callable;
-import java.util.concurrent.CancellationException;
-import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ConcurrentNavigableMap;
 import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.ConcurrentSkipListSet;
@@ -68,6 +70,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.*;
 import java.util.regex.Matcher;
@@ -179,6 +182,8 @@ public final class CASDiskWriteAheadLog implements OWriteAheadLog {
   private long segmentId = -1;
 
   private final ScheduledFuture<?> recordsWriterFuture;
+  private final Semaphore recordsWriterShutdownSemaphore = new Semaphore(0);
+  private volatile boolean shutdownRecordsWriter = false;
 
   private final ConcurrentNavigableMap<OLogSequenceNumber, EventWrapper> events =
       new ConcurrentSkipListMap<>();
@@ -188,15 +193,9 @@ public final class CASDiskWriteAheadLog implements OWriteAheadLog {
   private final TreeMap<OLogSequenceNumber, Integer> cutTillLimits = new TreeMap<>();
   private final ScalableRWLock cuttingLock = new ScalableRWLock();
 
-  private final ConcurrentLinkedQueue<OPair<Long, OWALFile>> fileCloseQueue =
-      new ConcurrentLinkedQueue<>();
-  private final AtomicInteger fileCloseQueueSize = new AtomicInteger();
-
   private final AtomicReference<CountDownLatch> flushLatch =
       new AtomicReference<>(new CountDownLatch(0));
   private volatile Future<?> writeFuture = null;
-  // not volatile because used only inside of write thread.
-  private OLogSequenceNumber writtenCheckpoint = null;
 
   private long lastFSyncTs = -1;
   private final int fsyncInterval;
@@ -210,6 +209,9 @@ public final class CASDiskWriteAheadLog implements OWriteAheadLog {
   private OPointer writeBufferPointer = null;
   private int writeBufferPageIndex = -1;
 
+  private int latestOperationId = -1;
+  private final ArrayList<Integer> operationIds = new ArrayList<>();
+
   private final ByteBuffer writeBufferOne;
   private final OPointer writeBufferPointerOne;
 
@@ -217,7 +219,6 @@ public final class CASDiskWriteAheadLog implements OWriteAheadLog {
   private final OPointer writeBufferPointerTwo;
 
   private OLogSequenceNumber lastLSN = null;
-  private OLogSequenceNumber checkPointLSN = null;
 
   private final byte[] aesKey;
   private final byte[] iv;
@@ -322,10 +323,13 @@ public final class CASDiskWriteAheadLog implements OWriteAheadLog {
     this.maxSegmentSize = maxSegmentSize;
     this.segmentAdditionTs = System.nanoTime();
 
+    final int lastOperationId = readLatestOperationId();
+
     // we log empty record on open so end of WAL will always contain valid value
     final StartWALRecord startRecord = new StartWALRecord();
 
     startRecord.setLsn(new OLogSequenceNumber(currentSegment, CASWALPage.RECORDS_OFFSET));
+    startRecord.setOperationId(lastOperationId + 1);
     startRecord.setDistance(0);
     startRecord.setDiskSize(CASWALPage.RECORDS_OFFSET);
 
@@ -464,9 +468,117 @@ public final class CASDiskWriteAheadLog implements OWriteAheadLog {
   }
 
   private static Path calculateWalPath(final Path storagePath, final Path walPath) {
-    if (walPath == null) return storagePath;
+    if (walPath == null) {
+      return storagePath;
+    }
 
     return walPath;
+  }
+
+  private int readLatestOperationId() throws IOException {
+    final Iterator<Long> segmentsIterator = segments.descendingIterator();
+    while (segmentsIterator.hasNext()) {
+      final long segmentId = segmentsIterator.next();
+
+      final String segmentName = getSegmentName(segmentId);
+      final Path segmentPath = walLocation.resolve(segmentName);
+
+      try (final FileChannel fileChannel = FileChannel.open(segmentPath, StandardOpenOption.READ)) {
+        final long filledUpTo = fileChannel.size();
+        final long pages = filledUpTo / pageSize;
+
+        for (long pageIndex = pages - 1; pageIndex >= 0; pageIndex--) {
+          final long pagePosition = pageIndex * pageSize;
+          final ByteBuffer buffer = ByteBuffer.allocate(pageSize).order(ByteOrder.nativeOrder());
+
+          OIOUtils.readByteBuffer(buffer, fileChannel, pagePosition, false);
+          buffer.rewind();
+
+          try {
+            if (!checkPageIsBrokenAndDecrypt(buffer, segmentId, pageIndex, pageSize)) {
+              return buffer.getInt(CASWALPage.PAGE_OPERATION_ID_OFFSET);
+            }
+          } catch (EncryptionKeyIsAbsentException e) {
+            // ignore
+          }
+        }
+      }
+    }
+
+    return -1;
+  }
+
+  void assertCorrectnessOperationIds() throws IOException {
+    final Iterator<Long> segmentsIterator = segments.iterator();
+    int currentOperationId = -1;
+
+    while (segmentsIterator.hasNext()) {
+      final long segmentId = segmentsIterator.next();
+
+      final String segmentName = getSegmentName(segmentId);
+      final Path segmentPath = walLocation.resolve(segmentName);
+
+      try (final FileChannel fileChannel = FileChannel.open(segmentPath, StandardOpenOption.READ)) {
+        final long filledUpTo = fileChannel.size();
+        final long pages = filledUpTo / pageSize;
+
+        byte[] recordContent = null;
+        byte[] rawRecordSize = new byte[4];
+
+        int recordSizeRead = 0;
+        int bytesToRead = -1;
+
+        for (long pageIndex = 0; pageIndex < pages; pageIndex++) {
+          final long pagePosition = pageIndex * pageSize;
+          final ByteBuffer buffer = ByteBuffer.allocate(pageSize).order(ByteOrder.nativeOrder());
+
+          OIOUtils.readByteBuffer(buffer, fileChannel, pagePosition, false);
+
+          if (!checkPageIsBrokenAndDecrypt(buffer, segmentId, pageIndex, this.pageSize)) {
+            final int pageSize = buffer.getShort(CASWALPage.PAGE_SIZE_OFFSET);
+            buffer.position(CASWALPage.RECORDS_OFFSET);
+
+            while (buffer.position() < pageSize) {
+              if (recordSizeRead < OIntegerSerializer.INT_SIZE) {
+                final int chunkSize =
+                    Math.min(
+                        OIntegerSerializer.INT_SIZE - recordSizeRead, pageSize - buffer.position());
+
+                buffer.get(rawRecordSize, recordSizeRead, chunkSize);
+                recordSizeRead += chunkSize;
+
+                if (recordSizeRead == OIntegerSerializer.INT_SIZE) {
+                  bytesToRead = OIntegerSerializer.INSTANCE.deserializeNative(rawRecordSize, 0);
+                  recordContent = new byte[bytesToRead];
+                }
+              }
+
+              if (recordContent != null) {
+                final int chunkSize = Math.min(bytesToRead, pageSize - buffer.position());
+                buffer.get(recordContent, recordContent.length - bytesToRead, chunkSize);
+
+                bytesToRead -= chunkSize;
+                if (bytesToRead == 0) {
+                  final WriteableWALRecord record =
+                      OWALRecordsFactory.INSTANCE.fromStream(recordContent);
+                  assert currentOperationId == -1
+                      || currentOperationId + 1 == record.getOperationId();
+
+                  currentOperationId = record.getOperationId();
+
+                  bytesToRead = -1;
+                  recordContent = null;
+                  recordSizeRead = 0;
+                }
+              }
+            }
+
+            assert currentOperationId == -1
+                || buffer.getInt(CASWALPage.PAGE_OPERATION_ID_OFFSET) == currentOperationId;
+          }
+        }
+      }
+    }
   }
 
   public List<WriteableWALRecord> read(final OLogSequenceNumber lsn, final int limit)
@@ -572,7 +684,7 @@ public final class CASDiskWriteAheadLog implements OWriteAheadLog {
       throws IOException {
     final List<WriteableWALRecord> result = new ArrayList<>();
     long position = lsn.getPosition();
-    long pageIndex = position / pageSize;
+    int pageIndex = (int) (position / pageSize);
     long segment = lsn.getSegment();
 
     int pagesRead = 0;
@@ -593,7 +705,7 @@ public final class CASDiskWriteAheadLog implements OWriteAheadLog {
 
         int bytesRead = 0;
 
-        long lsnPos = -1;
+        int lsnPos = -1;
 
         segment = segmentsIterator.next();
 
@@ -873,14 +985,15 @@ public final class CASDiskWriteAheadLog implements OWriteAheadLog {
 
     if (magicNumber == CASWALPage.MAGIC_NUMBER_WITH_ENCRYPTION) {
       if (aesKey == null) {
-        throw new OStorageException("Can not decrypt WAL page because decryption key is absent.");
+        throw new EncryptionKeyIsAbsentException(
+            "Can not decrypt WAL page because decryption key is absent.");
       }
 
       doEncryptionDecryption(segmentId, pageIndex, Cipher.DECRYPT_MODE, 0, this.pageSize, buffer);
     }
 
     final int pageSize = buffer.getShort(CASWALPage.PAGE_SIZE_OFFSET);
-    if (pageSize == 0 || pageSize > walPageSize) {
+    if (pageSize <= 0 || pageSize > walPageSize) {
       return true;
     }
 
@@ -951,11 +1064,6 @@ public final class CASDiskWriteAheadLog implements OWriteAheadLog {
     final OAtomicUnitEndRecord record =
         new OAtomicUnitEndRecord(operationUnitId, rollback, atomicOperationMetadata);
     return log(record);
-  }
-
-  @Override
-  public OLogSequenceNumber logFullCheckpointEnd() {
-    return log(new OCheckpointEndRecord());
   }
 
   public OLogSequenceNumber log(final WriteableWALRecord writeableRecord) {
@@ -1089,24 +1197,6 @@ public final class CASDiskWriteAheadLog implements OWriteAheadLog {
           return false;
         }
 
-        OPair<Long, OWALFile> pair = fileCloseQueue.poll();
-        while (pair != null) {
-          final OWALFile file = pair.value;
-
-          fileCloseQueueSize.decrementAndGet();
-          if (pair.key >= segmentId) {
-            if (callFsync) {
-              file.force(true);
-            }
-
-            file.close();
-            break;
-          } else {
-            file.close();
-          }
-          pair = fileCloseQueue.poll();
-        }
-
         boolean removed = false;
 
         final Iterator<Long> segmentIterator = segments.iterator();
@@ -1159,6 +1249,10 @@ public final class CASDiskWriteAheadLog implements OWriteAheadLog {
     } finally {
       segmentLock.exclusiveUnlock();
     }
+
+    // we should have at least single record in the WAL to avoid loosing the correct chain
+    // of operation ids.
+    log(new EmptyWALRecord());
 
     return true;
   }
@@ -1254,15 +1348,15 @@ public final class CASDiskWriteAheadLog implements OWriteAheadLog {
 
   private OLogSequenceNumber doLogRecord(final WriteableWALRecord writeableRecord) {
     if (writeableRecord.getBinaryContentLen() < 0) {
-      final OPair<ByteBuffer, Long> serializedRecord = OWALRecordsFactory.toStream(writeableRecord);
-      writeableRecord.setBinaryContent(serializedRecord.key, serializedRecord.value);
+      final ByteBuffer byteBuffer = OWALRecordsFactory.toStream(writeableRecord);
+      writeableRecord.setBinaryContent(byteBuffer, 0);
     }
 
     writeableRecord.setLsn(new OLogSequenceNumber(currentSegment, -1));
 
     records.offer(writeableRecord);
 
-    calculateRecordsLSNs();
+    calculateRecordIDs();
 
     final OLogSequenceNumber recordLSN = writeableRecord.getLsn();
 
@@ -1292,18 +1386,13 @@ public final class CASDiskWriteAheadLog implements OWriteAheadLog {
       doFlush(true);
     }
 
-    if (!recordsWriterFuture.cancel(false) && !recordsWriterFuture.isDone()) {
-      throw new OStorageException("Can not cancel background write thread in WAL");
-    }
+    shutdownRecordsWriter = true;
 
     try {
-      recordsWriterFuture.get();
-    } catch (CancellationException e) {
-      // ignore, we canceled scheduled execution
-    } catch (InterruptedException | ExecutionException e) {
-      throw OException.wrapException(
-          new OStorageException("Error during writing of WAL records in storage " + storageName),
-          e);
+      recordsWriterShutdownSemaphore.acquire(1);
+    } catch (final InterruptedException e) {
+      throw new OInterruptedException(
+          "WAL shutdown in storage " + storageName + " was interrupted");
     }
 
     if (writeFuture != null) {
@@ -1337,18 +1426,6 @@ public final class CASDiskWriteAheadLog implements OWriteAheadLog {
       throw OException.wrapException(new OStorageException("Error during writint of WAL data"), e);
     }
 
-    for (final OPair<Long, OWALFile> pair : fileCloseQueue) {
-      final OWALFile file = pair.value;
-
-      if (callFsync) {
-        file.force(true);
-      }
-
-      file.close();
-    }
-
-    fileCloseQueueSize.set(0);
-
     if (walFile != null) {
       if (callFsync) {
         walFile.force(true);
@@ -1358,7 +1435,6 @@ public final class CASDiskWriteAheadLog implements OWriteAheadLog {
     }
 
     segments.clear();
-    fileCloseQueue.clear();
 
     allocator.deallocate(writeBufferPointerOne);
     allocator.deallocate(writeBufferPointerTwo);
@@ -1482,7 +1558,7 @@ public final class CASDiskWriteAheadLog implements OWriteAheadLog {
     }
   }
 
-  private void calculateRecordsLSNs() {
+  private void calculateRecordIDs() {
     final List<OWALRecord> unassignedList = new ArrayList<>();
 
     Cursor<OWALRecord> cursor = records.peekLast();
@@ -1521,10 +1597,21 @@ public final class CASDiskWriteAheadLog implements OWriteAheadLog {
         final OLogSequenceNumber lsn = record.getLsn();
 
         if (lsn.getPosition() < 0) {
-          final long position = calculatePosition(record, prevRecord, pageSize, maxRecordSize);
+          final int position = calculatePosition(record, prevRecord, pageSize, maxRecordSize);
           final OLogSequenceNumber newLSN = new OLogSequenceNumber(lsn.getSegment(), position);
 
           if (record.getLsn().getPosition() < 0) {
+            if (prevRecord instanceof WriteableWALRecord) {
+              record.setOperationId(prevRecord.getOperationId() + 1);
+            } else {
+              record.setOperationId(prevRecord.getOperationId());
+            }
+
+            if (record instanceof WriteableWALRecord) {
+              OWALRecordsFactory.serializeOperationId(
+                  ((WriteableWALRecord) record).getBinaryContent(), record.getOperationId());
+            }
+
             record.setLsn(newLSN);
           }
         }
@@ -1540,7 +1627,7 @@ public final class CASDiskWriteAheadLog implements OWriteAheadLog {
 
     records.offer(milestoneRecord);
 
-    calculateRecordsLSNs();
+    calculateRecordIDs();
 
     return milestoneRecord;
   }
@@ -1549,13 +1636,13 @@ public final class CASDiskWriteAheadLog implements OWriteAheadLog {
     return end.get();
   }
 
-  private static long calculatePosition(
+  private static int calculatePosition(
       final OWALRecord record, final OWALRecord prevRecord, int pageSize, int maxRecordSize) {
     assert prevRecord.getLsn().getSegment() <= record.getLsn().getSegment()
         : "prev segment "
-            + prevRecord.getLsn().getSegment()
-            + " segment "
-            + record.getLsn().getSegment();
+        + prevRecord.getLsn().getSegment()
+        + " segment "
+        + record.getLsn().getSegment();
 
     if (prevRecord instanceof StartWALRecord) {
       assert prevRecord.getLsn().getSegment() == record.getLsn().getSegment();
@@ -1646,7 +1733,7 @@ public final class CASDiskWriteAheadLog implements OWriteAheadLog {
 
         record.setDistance(0);
 
-        return newPosition;
+        return (int) newPosition;
       } else {
         final long prevPosition = prevRecord.getLsn().getPosition();
         final long end = prevPosition + prevRecord.getDistance();
@@ -1707,7 +1794,7 @@ public final class CASDiskWriteAheadLog implements OWriteAheadLog {
       record.setDiskSize(diskSize);
     }
 
-    return start;
+    return (int) start;
   }
 
   private void fireEventsFor(final OLogSequenceNumber lsn) {
@@ -1736,6 +1823,12 @@ public final class CASDiskWriteAheadLog implements OWriteAheadLog {
     @Override
     public void run() {
       try {
+        if (shutdownRecordsWriter) {
+          recordsWriterFuture.cancel(false);
+          recordsWriterShutdownSemaphore.release(1);
+          return;
+        }
+
         if (printPerformanceStatistic) {
           printReport();
         }
@@ -1779,7 +1872,7 @@ public final class CASDiskWriteAheadLog implements OWriteAheadLog {
               assert lastRecord != null;
 
               if (lastRecord.getLsn().getPosition() == -1) {
-                calculateRecordsLSNs();
+                calculateRecordIDs();
               }
 
               assert lastRecord.getLsn().getPosition() >= 0;
@@ -1802,14 +1895,20 @@ public final class CASDiskWriteAheadLog implements OWriteAheadLog {
                 if (segmentId != lsn.getSegment()) {
                   if (walFile != null) {
                     if (writeBufferPointer != null) {
-                      writeBuffer(walFile, segmentId, writeBuffer, lastLSN, checkPointLSN);
+
+                      if (writeBuffer.position() > CASWALPage.RECORDS_OFFSET) {
+                        assert latestOperationId >= 0;
+                        operationIds.add(latestOperationId);
+                      }
+
+                      writeBuffer(walFile, segmentId, writeBuffer, operationIds, lastLSN);
                     }
 
                     writeBufferPointer = null;
                     writeBuffer = null;
                     writeBufferPageIndex = -1;
+                    operationIds.clear();
 
-                    checkPointLSN = null;
                     lastLSN = null;
 
                     try {
@@ -1822,8 +1921,16 @@ public final class CASDiskWriteAheadLog implements OWriteAheadLog {
 
                     assert walFile.position() == currentPosition;
 
-                    fileCloseQueueSize.incrementAndGet();
-                    fileCloseQueue.offer(new OPair<>(segmentId, walFile));
+                    final OWALFile file = walFile;
+                    writeFuture =
+                        writeExecutor.submit(
+                            (Callable<?>)
+                                () -> {
+                                  syncFile(file);
+                                  file.close();
+
+                                  return null;
+                                });
                   }
 
                   segmentId = lsn.getSegment();
@@ -1854,7 +1961,10 @@ public final class CASDiskWriteAheadLog implements OWriteAheadLog {
                     if (writeBuffer == null || writeBuffer.remaining() == 0) {
                       if (writeBufferPointer != null) {
                         assert writeBuffer != null;
-                        writeBuffer(walFile, segmentId, writeBuffer, lastLSN, checkPointLSN);
+                        assert latestOperationId >= 0;
+
+                        operationIds.add(latestOperationId);
+                        writeBuffer(walFile, segmentId, writeBuffer, operationIds, lastLSN);
                       }
 
                       if (useFirstBuffer) {
@@ -1865,17 +1975,26 @@ public final class CASDiskWriteAheadLog implements OWriteAheadLog {
                         writeBuffer = writeBufferTwo;
                       }
 
+                      operationIds.clear();
+
                       writeBuffer.limit(writeBuffer.capacity());
                       writeBuffer.rewind();
                       useFirstBuffer = !useFirstBuffer;
 
                       writeBufferPageIndex = -1;
 
-                      checkPointLSN = null;
                       lastLSN = null;
                     }
 
                     if (writeBuffer.position() % pageSize == 0) {
+                      // we need to store latest operation id stored inside of the previous page
+                      // otherwise we will store latest operation id to the next page
+                      if (writeBuffer.position() > 0) {
+                        assert latestOperationId >= 0;
+
+                        operationIds.add(latestOperationId);
+                      }
+
                       writeBufferPageIndex++;
                       writeBuffer.position(writeBuffer.position() + CASWALPage.RECORDS_OFFSET);
                     }
@@ -1932,12 +2051,15 @@ public final class CASDiskWriteAheadLog implements OWriteAheadLog {
                   }
 
                   lastLSN = lsn;
-                  if (writeableRecord.isUpdateMasterRecord()) {
-                    checkPointLSN = lastLSN;
-                  }
 
                   queueSize.addAndGet(-writeableRecord.getDiskSize());
                   writeableRecord.written();
+
+                  assert operationIds.isEmpty()
+                      || latestOperationId + 1 == writeableRecord.getOperationId();
+
+                  latestOperationId = writeableRecord.getOperationId();
+
                   writeableRecord.freeBinaryContent();
                 }
               }
@@ -1949,13 +2071,18 @@ public final class CASDiskWriteAheadLog implements OWriteAheadLog {
             }
 
             if ((makeFSync || fullWrite) && writeBufferPointer != null) {
-              writeBuffer(walFile, segmentId, writeBuffer, lastLSN, checkPointLSN);
+              if (writeBuffer.position() > CASWALPage.RECORDS_OFFSET) {
+                assert latestOperationId >= 0;
+                operationIds.add(latestOperationId);
+              }
 
+              writeBuffer(walFile, segmentId, writeBuffer, operationIds, lastLSN);
+
+              operationIds.clear();
               writeBufferPointer = null;
               writeBuffer = null;
               writeBufferPageIndex = -1;
 
-              checkPointLSN = null;
               lastLSN = null;
             }
           } finally {
@@ -1981,63 +2108,12 @@ public final class CASDiskWriteAheadLog implements OWriteAheadLog {
 
             assert walFile == null || walFile.position() == currentPosition;
 
+            final OWALFile file = walFile;
             writeFuture =
                 writeExecutor.submit(
                     (Callable<?>)
                         () -> {
-                          try {
-                            long startTs = 0;
-                            if (printPerformanceStatistic) {
-                              startTs = System.nanoTime();
-                            }
-
-                            final int cqSize = fileCloseQueueSize.get();
-                            if (cqSize > 0) {
-                              int counter = 0;
-
-                              while (counter < cqSize) {
-                                final OPair<Long, OWALFile> pair = fileCloseQueue.poll();
-                                if (pair != null) {
-                                  final OWALFile file = pair.value;
-
-                                  assert file.position() % pageSize == 0;
-
-                                  if (callFsync) {
-                                    file.force(true);
-                                  }
-
-                                  file.close();
-
-                                  fileCloseQueueSize.decrementAndGet();
-                                } else {
-                                  break;
-                                }
-
-                                counter++;
-                              }
-                            }
-
-                            if (callFsync && walFile != null) {
-                              walFile.force(true);
-                            }
-
-                            flushedLSN = writtenUpTo.get().lsn;
-
-                            fireEventsFor(flushedLSN);
-
-                            if (printPerformanceStatistic) {
-                              final long endTs = System.nanoTime();
-                              //noinspection NonAtomicOperationOnVolatileField
-                              fsyncTime += (endTs - startTs);
-                              //noinspection NonAtomicOperationOnVolatileField
-                              fsyncCount++;
-                            }
-                          } catch (final IOException e) {
-                            OLogManager.instance()
-                                .errorNoDb(this, "Error during FSync of WAL data", e);
-                            throw e;
-                          }
-
+                          syncFile(file);
                           return null;
                         });
 
@@ -2055,12 +2131,40 @@ public final class CASDiskWriteAheadLog implements OWriteAheadLog {
       }
     }
 
+    private void syncFile(final OWALFile file) throws IOException {
+      try {
+        long startTs = 0;
+        if (printPerformanceStatistic) {
+          startTs = System.nanoTime();
+        }
+
+        if (callFsync && file != null) {
+          file.force(true);
+        }
+
+        flushedLSN = writtenUpTo.get().lsn;
+
+        fireEventsFor(flushedLSN);
+
+        if (printPerformanceStatistic) {
+          final long endTs = System.nanoTime();
+          //noinspection NonAtomicOperationOnVolatileField
+          fsyncTime += (endTs - startTs);
+          //noinspection NonAtomicOperationOnVolatileField
+          fsyncCount++;
+        }
+      } catch (final IOException e) {
+        OLogManager.instance().errorNoDb(this, "Error during FSync of WAL data", e);
+        throw e;
+      }
+    }
+
     private void writeBuffer(
         final OWALFile file,
         final long segmentId,
         final ByteBuffer buffer,
-        final OLogSequenceNumber lastLSN,
-        final OLogSequenceNumber checkpointLSN)
+        final ArrayList<Integer> operationIds,
+        final OLogSequenceNumber lastLSN)
         throws IOException {
 
       if (buffer.position() <= CASWALPage.RECORDS_OFFSET) {
@@ -2090,7 +2194,12 @@ public final class CASDiskWriteAheadLog implements OWriteAheadLog {
             aesKey == null ? CASWALPage.MAGIC_NUMBER : CASWALPage.MAGIC_NUMBER_WITH_ENCRYPTION);
 
         buffer.position(start + CASWALPage.PAGE_SIZE_OFFSET);
+        assert (short) pageSize >= 0;
+
         buffer.putShort((short) pageSize);
+
+        buffer.position(start + CASWALPage.PAGE_OPERATION_ID_OFFSET);
+        buffer.putInt(operationIds.get(page));
 
         buffer.position(start + CASWALPage.RECORDS_OFFSET);
         final XXHash64 xxHash64 = xxHashFactory.hash64();
@@ -2174,12 +2283,6 @@ public final class CASDiskWriteAheadLog implements OWriteAheadLog {
                             writtenUpTo.lazySet(new WrittenUpTo(lastLSN, buffer.limit()));
                           }
                         }
-                      }
-
-                      if (checkpointLSN != null) {
-                        assert writtenCheckpoint == null
-                            || writtenCheckpoint.compareTo(checkpointLSN) < 0;
-                        writtenCheckpoint = checkpointLSN;
                       }
 
                       if (printPerformanceStatistic) {

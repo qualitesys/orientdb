@@ -49,7 +49,8 @@ public final class OSBTreeBonsaiBucket<K, V> extends OBonsaiBucketAbstract {
   private static final byte DELETED = 0x2;
   private static final byte TO_DELETE = 0x4;
   private static final int MAX_ENTREE_SIZE = 24576000;
-  private static final int FREE_POINTER_OFFSET = WAL_POSITION_OFFSET + OLongSerializer.LONG_SIZE;
+  private static final int FREE_POINTER_OFFSET =
+      WAL_OPERATION_ID_OFFSET + OIntegerSerializer.INT_SIZE;
   private static final int SIZE_OFFSET = FREE_POINTER_OFFSET + OIntegerSerializer.INT_SIZE;
   private static final int FLAGS_OFFSET = SIZE_OFFSET + OIntegerSerializer.INT_SIZE;
   private static final int FREE_LIST_POINTER_OFFSET = FLAGS_OFFSET + OByteSerializer.BYTE_SIZE;

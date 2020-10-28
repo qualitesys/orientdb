@@ -922,8 +922,8 @@ public class WOWCacheTestIT {
     int segment =
         OIntegerSerializer.INSTANCE.deserializeNative(
             content, OLongSerializer.LONG_SIZE + OIntegerSerializer.INT_SIZE);
-    long position =
-        OLongSerializer.INSTANCE.deserializeNative(
+    int position =
+        OIntegerSerializer.INSTANCE.deserializeNative(
             content, OLongSerializer.LONG_SIZE + 2 * OIntegerSerializer.INT_SIZE);
 
     OLogSequenceNumber readLsn = new OLogSequenceNumber(segment, position);
@@ -1041,11 +1041,6 @@ public class WOWCacheTestIT {
     @Override
     public int serializedSize() {
       return data.length + OIntegerSerializer.INT_SIZE;
-    }
-
-    @Override
-    public boolean isUpdateMasterRecord() {
-      return false;
     }
 
     @Override

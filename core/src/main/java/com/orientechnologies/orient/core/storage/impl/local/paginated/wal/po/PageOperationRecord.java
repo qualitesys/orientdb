@@ -12,11 +12,6 @@ public abstract class PageOperationRecord extends OOperationUnitBodyRecord {
 
   public PageOperationRecord() {}
 
-  @Override
-  public boolean isUpdateMasterRecord() {
-    return false;
-  }
-
   public abstract void redo(OCacheEntry cacheEntry);
 
   public abstract void undo(OCacheEntry cacheEntry);

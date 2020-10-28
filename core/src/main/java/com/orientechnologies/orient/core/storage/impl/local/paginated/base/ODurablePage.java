@@ -63,10 +63,14 @@ public class ODurablePage {
 
   protected static final int WAL_SEGMENT_OFFSET = CRC32_OFFSET + OIntegerSerializer.INT_SIZE;
   protected static final int WAL_POSITION_OFFSET = WAL_SEGMENT_OFFSET + OLongSerializer.LONG_SIZE;
+  protected static final int WAL_OPERATION_ID_OFFSET =
+      WAL_POSITION_OFFSET + OIntegerSerializer.INT_SIZE;
+
   public static final int MAX_PAGE_SIZE_BYTES =
       OGlobalConfiguration.DISK_CACHE_PAGE_SIZE.getValueAsInteger() * 1024;
 
-  public static final int NEXT_FREE_POSITION = WAL_POSITION_OFFSET + OLongSerializer.LONG_SIZE;
+  public static final int NEXT_FREE_POSITION =
+      WAL_OPERATION_ID_OFFSET + OIntegerSerializer.INT_SIZE;
 
   private final OWALChanges changes;
   private final OCacheEntry cacheEntry;
@@ -83,17 +87,20 @@ public class ODurablePage {
 
   public final OLogSequenceNumber getLSN() {
     final long segment = getLongValue(WAL_SEGMENT_OFFSET);
-    final long position = getLongValue(WAL_SEGMENT_OFFSET + OLongSerializer.LONG_SIZE);
+    final int position = getIntValue(WAL_SEGMENT_OFFSET + OLongSerializer.LONG_SIZE);
 
     return new OLogSequenceNumber(segment, position);
   }
 
   public static OLogSequenceNumber getLogSequenceNumberFromPage(final ByteBuffer buffer) {
-    buffer.position(WAL_SEGMENT_OFFSET);
-    final long segment = buffer.getLong();
-    final long position = buffer.getLong();
+    final long segment = buffer.getLong(WAL_SEGMENT_OFFSET);
+    final int position = buffer.getInt(WAL_POSITION_OFFSET);
 
     return new OLogSequenceNumber(segment, position);
+  }
+
+  public static int geOperationIdFromPage(final ByteBuffer buffer) {
+    return buffer.getInt(WAL_OPERATION_ID_OFFSET);
   }
 
   /**
@@ -125,8 +132,8 @@ public class ODurablePage {
   public static OLogSequenceNumber getLogSequenceNumber(final int offset, final byte[] data) {
     final long segment =
         OLongSerializer.INSTANCE.deserializeNative(data, offset + WAL_SEGMENT_OFFSET);
-    final long position =
-        OLongSerializer.INSTANCE.deserializeNative(data, offset + WAL_POSITION_OFFSET);
+    final int position =
+        OIntegerSerializer.INSTANCE.deserializeNative(data, offset + WAL_POSITION_OFFSET);
 
     return new OLogSequenceNumber(segment, position);
   }
@@ -319,14 +326,17 @@ public class ODurablePage {
     changes.applyChanges(buffer);
   }
 
-  public final void setLsn(final OLogSequenceNumber lsn) {
+  public final void setLsnAndOperationId(final OLogSequenceNumber lsn, int operationId) {
     final ByteBuffer buffer = pointer.getBufferDuplicate();
+
+    assert buffer != null;
     assert buffer.order() == ByteOrder.nativeOrder();
 
     buffer.position(WAL_SEGMENT_OFFSET);
 
     buffer.putLong(lsn.getSegment());
-    buffer.putLong(lsn.getPosition());
+    buffer.putInt(lsn.getPosition());
+    buffer.putInt(operationId);
   }
 
   public OLogSequenceNumber getLsn() {
@@ -335,19 +345,23 @@ public class ODurablePage {
     buffer.position(WAL_SEGMENT_OFFSET);
 
     final long segment = buffer.getLong();
-    final long position = buffer.getLong();
+    final int position = buffer.getInt();
 
     return new OLogSequenceNumber(segment, position);
   }
 
-  public static void setPageLSN(final OLogSequenceNumber lsn, final OCacheEntry cacheEntry) {
+  public static void setPageLSNAndOperationId(final OLogSequenceNumber lsn, final int operationId,
+      final OCacheEntry cacheEntry) {
     final ByteBuffer buffer = cacheEntry.getCachePointer().getBufferDuplicate();
+
+    assert buffer != null;
     assert buffer.order() == ByteOrder.nativeOrder();
 
     buffer.position(WAL_SEGMENT_OFFSET);
 
     buffer.putLong(lsn.getSegment());
-    buffer.putLong(lsn.getPosition());
+    buffer.putInt(lsn.getPosition());
+    buffer.putInt(operationId);
   }
 
   @Override

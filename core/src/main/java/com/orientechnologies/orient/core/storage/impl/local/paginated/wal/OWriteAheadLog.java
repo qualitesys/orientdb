@@ -37,9 +37,6 @@ public interface OWriteAheadLog {
   String MASTER_RECORD_EXTENSION = ".wmr";
   String WAL_SEGMENT_EXTENSION = ".wal";
 
-  @SuppressWarnings("UnusedReturnValue")
-  OLogSequenceNumber logFullCheckpointEnd() throws IOException;
-
   OLogSequenceNumber begin();
 
   OLogSequenceNumber begin(long segmentId) throws IOException;

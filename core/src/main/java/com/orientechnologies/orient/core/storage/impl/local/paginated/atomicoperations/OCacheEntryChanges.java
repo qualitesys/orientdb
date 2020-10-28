@@ -9,7 +9,9 @@ import com.orientechnologies.orient.core.storage.impl.local.paginated.wal.OWALPa
 import com.orientechnologies.orient.core.storage.impl.local.paginated.wal.po.PageOperationRecord;
 import java.util.List;
 
-/** Created by tglman on 23/06/16. */
+/**
+ * Created by tglman on 23/06/16.
+ */
 public class OCacheEntryChanges implements OCacheEntry {
 
   protected OCacheEntry delegate;
@@ -18,6 +20,8 @@ public class OCacheEntryChanges implements OCacheEntry {
   protected boolean isNew;
 
   private OLogSequenceNumber changeLSN;
+
+  private int operationId;
 
   protected boolean verifyCheckSum;
 
@@ -221,6 +225,14 @@ public class OCacheEntryChanges implements OCacheEntry {
   @Override
   public LRUList getContainer() {
     throw new UnsupportedOperationException();
+  }
+
+  public int getOperationId() {
+    return operationId;
+  }
+
+  public void setOperationId(int operationId) {
+    this.operationId = operationId;
   }
 
   OLogSequenceNumber getChangeLSN() {

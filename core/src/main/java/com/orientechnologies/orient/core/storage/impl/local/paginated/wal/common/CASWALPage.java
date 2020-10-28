@@ -5,6 +5,9 @@ import com.orientechnologies.common.serialization.types.OLongSerializer;
 import com.orientechnologies.common.serialization.types.OShortSerializer;
 
 public final class CASWALPage {
+
+  public static final int DEFAULT_PAGE_SIZE = 4 * 1024;
+
   public static final long MAGIC_NUMBER = 0xEF31BCDAFL;
   public static final long MAGIC_NUMBER_WITH_ENCRYPTION = 0xEF42BCAFEL;
 
@@ -19,9 +22,9 @@ public final class CASWALPage {
 
   public static final int PAGE_SIZE_OFFSET = XX_OFFSET + OLongSerializer.LONG_SIZE;
 
-  public static final int DEFAULT_PAGE_SIZE = 4 * 1024;
+  public static final int PAGE_OPERATION_ID_OFFSET = PAGE_SIZE_OFFSET + OShortSerializer.SHORT_SIZE;
 
-  public static final int RECORDS_OFFSET = PAGE_SIZE_OFFSET + OShortSerializer.SHORT_SIZE;
+  public static final int RECORDS_OFFSET = PAGE_OPERATION_ID_OFFSET + OIntegerSerializer.INT_SIZE;
 
   public static final int DEFAULT_MAX_RECORD_SIZE = DEFAULT_PAGE_SIZE - RECORDS_OFFSET;
 

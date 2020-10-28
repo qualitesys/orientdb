@@ -21,9 +21,11 @@
 package com.orientechnologies.orient.core.storage.impl.local.paginated.wal;
 
 import com.kenai.jffi.MemoryIO;
+import com.orientechnologies.common.serialization.types.OIntegerSerializer;
 import com.orientechnologies.orient.core.storage.impl.local.paginated.wal.common.WriteableWALRecord;
 import java.nio.ByteBuffer;
 import java.util.Objects;
+import java.util.function.ObjIntConsumer;
 
 /**
  * Abstract WAL record.
@@ -43,7 +45,10 @@ public abstract class OAbstractWALRecord implements WriteableWALRecord {
 
   private boolean written;
 
-  protected OAbstractWALRecord() {}
+  private volatile int operationId;
+
+  protected OAbstractWALRecord() {
+  }
 
   protected OAbstractWALRecord(final OLogSequenceNumber previousCheckpoint) {
     this.lsn = previousCheckpoint;
@@ -119,6 +124,14 @@ public abstract class OAbstractWALRecord implements WriteableWALRecord {
     written = true;
   }
 
+  public int getOperationId() {
+    return operationId;
+  }
+
+  public void setOperationId(int operationId) {
+    this.operationId = operationId;
+  }
+
   @Override
   public boolean isWritten() {
     return written;
@@ -126,8 +139,12 @@ public abstract class OAbstractWALRecord implements WriteableWALRecord {
 
   @Override
   public boolean equals(final Object o) {
-    if (this == o) return true;
-    if (o == null || getClass() != o.getClass()) return false;
+    if (this == o) {
+      return true;
+    }
+    if (o == null || getClass() != o.getClass()) {
+      return false;
+    }
 
     final OAbstractWALRecord that = (OAbstractWALRecord) o;
 

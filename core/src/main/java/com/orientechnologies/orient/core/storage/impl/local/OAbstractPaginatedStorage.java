@@ -6201,30 +6201,53 @@ public abstract class OAbstractPaginatedStorage extends OStorageAbstract
 
     writeAheadLog.addCutTillLimit(end);
     try {
-      OLogSequenceNumber lastSLN = readLastLSN();
+      LsnOperationId lsnOperationId = readLastLSNAndOperationId();
 
-      if (lastSLN == null) {
+      if (lsnOperationId == null) {
         OLogManager.instance()
             .infoNoDb(
                 this, "No information is stored in database, restoring from the begging of WAL ..");
         return restoreFromBeginning();
-      } else if (begin.compareTo(lastSLN) > 0) {
-        lastSLN = begin;
-        OLogManager.instance()
-            .errorNoDb(
-                this,
-                "Latest stored LSN inside of the page is %s but stored inside of WAL is %s. As result data can not be restored completely !",
-                null);
       }
 
-      return restoreFrom(lastSLN, writeAheadLog, true);
+      final int walOperationId;
+      final OLogSequenceNumber firstLSN;
+
+      final List<WriteableWALRecord> records;
+      if (begin.compareTo(lsnOperationId.lsn) <= 0) {
+        records = writeAheadLog.read(lsnOperationId.lsn, 1);
+      } else {
+        records = writeAheadLog.read(begin, 1);
+      }
+
+      if (records.isEmpty()) {
+        OLogManager.instance()
+            .errorNoDb(this, "WAL is broken and can not be used to restore data", null);
+
+        return null;
+      }
+
+      final WriteableWALRecord firstRecord = records.get(0);
+      walOperationId = firstRecord.getOperationId();
+      firstLSN = firstRecord.getLsn();
+
+      if (walOperationId != lsnOperationId.operationId + 1) {
+        OLogManager.instance().errorNoDb(this,
+            "WAL does not contain all data which are needed to restore broken database !!!",
+            null);
+
+        return restoreFromBeginning();
+      }
+
+      return restoreFrom(firstLSN, writeAheadLog, true);
     } finally {
       writeAheadLog.removeCutTillLimit(end);
     }
   }
 
-  private OLogSequenceNumber readLastLSN() throws IOException {
-    OLogSequenceNumber minLSN = null;
+  private LsnOperationId readLastLSNAndOperationId() throws IOException {
+    OLogSequenceNumber maxLSN = null;
+    int maxOperationId = -1;
 
     final Map<String, Long> files = writeCache.files();
     int counter = 0;
@@ -6246,14 +6269,20 @@ public abstract class OAbstractPaginatedStorage extends OStorageAbstract
         final OCacheEntry cacheEntry =
             readCache.loadForRead(entry.getValue(), pageIndex, false, writeCache, true);
         try {
-          final ByteBuffer byteBuffer = cacheEntry.getCachePointer().getBufferDuplicate();
+          final ByteBuffer byteBuffer = cacheEntry.getCachePointer().getBuffer();
           assert byteBuffer != null;
           final OLogSequenceNumber lsn = ODurablePage.getLogSequenceNumberFromPage(byteBuffer);
+          final int operationId = ODurablePage.geOperationIdFromPage(byteBuffer);
 
-          if (minLSN == null) {
-            minLSN = lsn;
-          } else if (lsn.compareTo(minLSN) < 0) {
-            minLSN = lsn;
+          if (maxLSN == null) {
+            maxLSN = lsn;
+            maxOperationId = operationId;
+
+          } else if (lsn.compareTo(maxLSN) > 0) {
+            assert maxOperationId < operationId;
+
+            maxLSN = lsn;
+            maxOperationId = operationId;
           }
         } finally {
           readCache.releaseFromRead(cacheEntry, writeCache);
@@ -6261,14 +6290,19 @@ public abstract class OAbstractPaginatedStorage extends OStorageAbstract
       }
     }
 
-    if (minLSN != null) {
+    if (maxLSN != null) {
       OLogManager.instance()
-          .infoNoDb(this, "Pre-processing complete latest stored LSN is %s", minLSN.toString());
+          .infoNoDb(
+              this,
+              "Pre-processing complete latest stored LSN is %s, operations id is %d",
+              maxLSN.toString(),
+              maxOperationId);
+      assert maxOperationId >= 0;
+      return new LsnOperationId(maxLSN, maxOperationId);
     } else {
       OLogManager.instance().infoNoDb(this, "Pre-processing complete, no stored data were found");
+      return null;
     }
-
-    return minLSN;
   }
 
   @SuppressWarnings("CanBeFinal")
@@ -6507,7 +6541,8 @@ public abstract class OAbstractPaginatedStorage extends OStorageAbstract
           final ODurablePage durablePage = new ODurablePage(cacheEntry);
           if (durablePage.getLsn().compareTo(walRecord.getLsn()) < 0) {
             durablePage.restoreChanges(updatePageRecord.getChanges());
-            durablePage.setLsn(updatePageRecord.getLsn());
+            durablePage.setLsnAndOperationId(
+                updatePageRecord.getLsn(), updatePageRecord.getOperationId());
           }
         } finally {
           readCache.releaseFromWrite(cacheEntry, writeCache, true);
@@ -7388,12 +7423,24 @@ public abstract class OAbstractPaginatedStorage extends OStorageAbstract
   }
 
   protected static final class StartupMetadata {
+
     private final long lastTxId;
     private final byte[] txMetadata;
 
     public StartupMetadata(long lastTxId, byte[] txMetadata) {
       this.lastTxId = lastTxId;
       this.txMetadata = txMetadata;
+    }
+  }
+
+  private static final class LsnOperationId {
+
+    private final OLogSequenceNumber lsn;
+    private final int operationId;
+
+    private LsnOperationId(OLogSequenceNumber lsn, int operationId) {
+      this.lsn = lsn;
+      this.operationId = operationId;
     }
   }
 }
