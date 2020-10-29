@@ -21,6 +21,7 @@
 package com.orientechnologies.orient.core.db.document;
 
 import com.orientechnologies.common.concur.ONeedRetryException;
+import com.orientechnologies.common.concur.lock.OInterruptedException;
 import com.orientechnologies.common.exception.OException;
 import com.orientechnologies.common.exception.OHighLevelException;
 import com.orientechnologies.common.listener.OListenerManger;
@@ -1810,6 +1811,10 @@ public abstract class ODatabaseDocumentAbstract extends OListenerManger<ODatabas
       boolean iForceCreate,
       ORecordCallback<? extends Number> iRecordCreatedCallback,
       ORecordCallback<Integer> iRecordUpdatedCallback) {
+
+    if (isInterruptingCommand()) {
+      throw new OInterruptedException("Command interrupted");
+    }
 
     if (!(iRecord instanceof ODocument)) {
       assignAndCheckCluster(iRecord, iClusterName);

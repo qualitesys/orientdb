@@ -1,5 +1,6 @@
 package com.orientechnologies.orient.core.sql.executor;
 
+import com.orientechnologies.orient.core.config.OGlobalConfiguration;
 import com.orientechnologies.orient.core.db.document.ODatabaseDocument;
 import com.orientechnologies.orient.core.db.document.ODatabaseDocumentTx;
 import org.junit.AfterClass;
@@ -81,5 +82,45 @@ public class OWhileBlockExecutionTest {
     Assert.assertEquals(2, tot);
     Assert.assertEquals(1, sum);
     results.close();
+  }
+
+  @Test
+  public void testGlobalTimeout() {
+    String className = "testGlobalTimeout";
+
+    long prevTimeout = OGlobalConfiguration.COMMAND_TIMEOUT.getValueAsLong();
+    try {
+      OGlobalConfiguration.COMMAND_TIMEOUT.setValue(100);
+      db.createClass(className);
+
+      String script = "";
+      script += "LET $i = 0;";
+      script += "WHILE (true){\n";
+      script += "  insert into " + className + " set value = $i;\n";
+      script += "  IF ($i > 1000000) {";
+      script += "    RETURN;";
+      script += "  }";
+      script += "  LET $i = $i + 1;";
+      script += "}";
+
+      try{
+        long begin = System.currentTimeMillis();
+        OResultSet results = db.execute("sql", script);
+        System.out.println(System.currentTimeMillis() - begin);
+      results.close();
+      }catch (Exception e){
+
+      }
+      OResultSet results = db.query("SELECT count(*) as count FROM " + className);
+
+      OResult item = results.next();
+      long tot = item.getProperty("count");
+      System.out.println(tot);
+
+      Assert.assertTrue(tot < 100000);
+      results.close();
+    } finally {
+      OGlobalConfiguration.COMMAND_TIMEOUT.setValue(prevTimeout);
+    }
   }
 }

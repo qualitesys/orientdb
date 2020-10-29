@@ -20,12 +20,14 @@
 
 package com.orientechnologies.orient.core.tx;
 
+import com.orientechnologies.common.concur.lock.OInterruptedException;
 import com.orientechnologies.common.exception.OException;
 import com.orientechnologies.common.log.OLogManager;
 import com.orientechnologies.orient.core.db.ODatabase;
 import com.orientechnologies.orient.core.db.ODatabase.OPERATION_MODE;
 import com.orientechnologies.orient.core.db.ODatabaseDocumentInternal;
 import com.orientechnologies.orient.core.db.document.LatestVersionRecordReader;
+import com.orientechnologies.orient.core.db.document.ODatabaseDocumentEmbedded;
 import com.orientechnologies.orient.core.db.document.RecordReader;
 import com.orientechnologies.orient.core.db.document.SimpleRecordReader;
 import com.orientechnologies.orient.core.db.record.OIdentifiable;
@@ -362,6 +364,10 @@ public class OTransactionOptimistic extends OTransactionRealAbstract {
       final boolean iForceCreate,
       final ORecordCallback<? extends Number> iRecordCreatedCallback,
       final ORecordCallback<Integer> iRecordUpdatedCallback) {
+
+    if (database.isInterruptingCommand()) {
+      throw new OInterruptedException("Command interrupted");
+    }
 
     if (iRecord == null) return null;
     ORecordOperation recordOperation = null;
