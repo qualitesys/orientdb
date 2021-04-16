@@ -611,6 +611,8 @@
 
                     <!-- | Apple's JVM sometimes requires more memory -->
                     <additionalJOption>-J-Xmx1024m</additionalJOption>
+                    <!-- Modif D.C. 2021 04 16 -->
+                    <additionalOptions>-Xdoclint:none</additionalOptions>
                 </configuration>
                 <!-- Modif D.C. 2021 04 6 pour mvn site -->
                 <reportSets>
@@ -748,12 +750,11 @@
                     </plugin>
                 </plugins>
             </build>
+            <!-- Modif D.C. 2021 04 16
             <properties>
-                <!-- Modif D.C. 2021 04 16
                 <additionalparam>-Xdoclint:none</additionalparam>
-                -->
-                <additionalOptions>-Xdoclint:none</additionalOptions>
             </properties>
+            -->
         </profile>
 
         <profile>
@@ -815,7 +816,6 @@
             <!-- Modif D.C. 2021 04 16
             <additionalparam>-Xdoclint:none</additionalparam>
             -->
-            <additionalOptions>-Xdoclint:none</additionalOptions>
         </profile>
 
         <profile>
