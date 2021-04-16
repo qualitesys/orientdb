@@ -37,10 +37,11 @@ jobs:
       # Compile et test
       - name: Compile and test
         run: |
+          cd graphdb |
           mvn -Dmaven.test.error.ignore=true -Dmaven.test.failure.ignore=true -X compile test
       #  -Dmaven.javadoc.skip=true
       - name: Run maven site apres tests
-        run: mvn site -Dsonar.reporting01nodocgeneration=yes
+        run: mvn -X site -Dsonar.reporting01nodocgeneration=yes
       - uses: actions/upload-artifact@v2
         with:
          name: ArtifactMvnSiteApresTests
