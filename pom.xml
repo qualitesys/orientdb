@@ -606,6 +606,22 @@
                     <!-- | Apple's JVM sometimes requires more memory -->
                     <additionalJOption>-J-Xmx1024m</additionalJOption>
                 </configuration>
+                <!-- Modif D.C. 2021 04 6 pour mvn site -->
+                <reportSets>
+                  <reportSet>
+                    <id>aggregate</id>
+                    <inherited>false</inherited>        
+                    <reports>
+                      <report>aggregate</report>
+                    </reports>
+                  </reportSet>
+                  <reportSet>
+                    <id>default</id>
+                    <reports>
+                      <report>javadoc</report>
+                    </reports>
+                  </reportSet>
+                </reportSets>
             </plugin>
 
         </plugins>
