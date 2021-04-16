@@ -749,7 +749,10 @@
                 </plugins>
             </build>
             <properties>
+                <!-- Modif D.C. 2021 04 16
                 <additionalparam>-Xdoclint:none</additionalparam>
+                -->
+                <additionalOptions>-Xdoclint:none</additionalOptions>
             </properties>
         </profile>
 
@@ -809,9 +812,10 @@
                     </plugin>
                 </plugins>
             </build>
-            <properties>
-                <additionalparam>-Xdoclint:none</additionalparam>
-            </properties>
+            <!-- Modif D.C. 2021 04 16
+            <additionalparam>-Xdoclint:none</additionalparam>
+            -->
+            <additionalOptions>-Xdoclint:none</additionalOptions>
         </profile>
 
         <profile>
