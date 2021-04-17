@@ -298,20 +298,22 @@
                         </gpgArguments>
                     </configuration>
                 </plugin>
-
+                <!--
                 <plugin>
                     <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-javadoc-plugin</artifactId>
+                -->
                     <!-- Modif D.C. 2021 04 16 pb pvn site
                     <version>3.0.1</version>
                     -->
+                <!--
                     <version>3.2.0</version>
                     <configuration>
                         <doclint>none</doclint>
                         <maxmemory>2G</maxmemory>
                     </configuration>
                 </plugin>
-
+                -->
                 <plugin>
                     <groupId>com.coveo</groupId>
                     <artifactId>fmt-maven-plugin</artifactId>
@@ -549,7 +551,7 @@
                     </execution>
                 </executions>
             </plugin>
-
+            <!--
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-javadoc-plugin</artifactId>
@@ -565,6 +567,7 @@
 
                 </configuration>
             </plugin>
+            -->
             <plugin>
                 <groupId>com.coveo</groupId>
                 <artifactId>fmt-maven-plugin</artifactId>
@@ -591,6 +594,7 @@
                 <!--suppress MavenModelInspection -->
                 <version>${surefire.version}</version>
             </plugin>
+            <!--
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-javadoc-plugin</artifactId>
@@ -610,13 +614,18 @@
                     <useStandardDocletOptions>true</useStandardDocletOptions>
 
                     <!-- | Apple's JVM sometimes requires more memory -->
+                    <!--
                     <additionalJOption>-J-Xmx1024m</additionalJOption>
+                    -->
                     <!-- Modif D.C. 2021 04 16 -->
                     <!-- Modif D.C. 2021 04 17 en comm
                     <additionalOptions>-Xdoclint:none</additionalOptions>
                     -->
+                <!--
                 </configuration>
+                -->
                 <!-- Modif D.C. 2021 04 6 pour mvn site -->
+                <!--
                 <reportSets>
                   <reportSet>
                     <id>aggregate</id>
@@ -633,6 +642,7 @@
                   </reportSet>
                 </reportSets>
             </plugin>
+            -->
 
         </plugins>
     </reporting>
@@ -886,6 +896,7 @@
                             </execution>
                         </executions>
                     </plugin>
+                    <!--
                     <plugin>
                         <groupId>org.apache.maven.plugins</groupId>
                         <artifactId>maven-javadoc-plugin</artifactId>
@@ -916,6 +927,7 @@
                             </execution>
                         </executions>
                     </plugin>
+                    -->
 
 
                     <plugin>
