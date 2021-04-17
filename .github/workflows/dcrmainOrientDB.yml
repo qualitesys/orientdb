@@ -37,8 +37,7 @@ jobs:
       # Compile et test
       - name: Compile and test
         run: |
-          cd graphdb |
-          mvn -Dmaven.test.error.ignore=true -Dmaven.test.failure.ignore=true -X compile test
+          mvn -Dmaven.test.error.ignore=true -Dmaven.test.failure.ignore=true  -Dmaven.test.redirectTestOutputToFile=true -X clean compile test
       #  -Dmaven.javadoc.skip=true
       - name: Run maven site apres tests
         run: mvn -X site -Dsonar.reporting01nodocgeneration=yes
