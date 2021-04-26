@@ -123,6 +123,8 @@ public abstract class AbstractServerClusterTest {
       for (final ServerRun server : serverInstance) {
         banner("STARTING SERVER -> " + server.getServerId() + "...");
 
+        onServerStarting(server);
+
         server.startServer(getDistributedServerConfiguration(server));
 
         if (delayServerStartup > 0)
@@ -273,9 +275,13 @@ public abstract class AbstractServerClusterTest {
       OrientDB orientDB =
           new OrientDB(
               "embedded:" + master.getServerHome() + "/databases/", OrientDBConfig.defaultConfig());
+
+      if (orientDB.exists(getDatabaseName())) orientDB.drop(getDatabaseName());
+
       orientDB.execute(
           "create database ? plocal users(admin identified by 'admin' role admin)",
           getDatabaseName());
+
       final ODatabaseDocument graph = orientDB.open(getDatabaseName(), "admin", "admin");
       try {
         onAfterDatabaseCreation(graph);
