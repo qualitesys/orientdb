@@ -817,19 +817,19 @@ public abstract class OIndexAbstract implements OIndexInternal {
    */
   public Iterable<OTransactionIndexChangesPerKey.OTransactionIndexEntry> interpretTxKeyChanges(
       OTransactionIndexChangesPerKey changes) {
-    return changes.entries;
+    return changes.getEntriesAsList();
   }
 
   private void applyIndexTxEntry(
       Map<Object, Object> snapshot, OTransactionIndexChangesPerKey entry) {
     for (OTransactionIndexChangesPerKey.OTransactionIndexEntry op : interpretTxKeyChanges(entry)) {
-      switch (op.operation) {
+      switch (op.getOperation()) {
         case PUT:
-          putInSnapshot(getCollatingValue(entry.key), op.value, snapshot);
+          putInSnapshot(getCollatingValue(entry.key), op.getValue(), snapshot);
           break;
         case REMOVE:
-          if (op.value != null)
-            removeFromSnapshot(getCollatingValue(entry.key), op.value, snapshot);
+          if (op.getValue() != null)
+            removeFromSnapshot(getCollatingValue(entry.key), op.getValue(), snapshot);
           else removeFromSnapshot(getCollatingValue(entry.key), snapshot);
           break;
         case CLEAR:
@@ -1197,7 +1197,7 @@ public abstract class OIndexAbstract implements OIndexInternal {
   public static void manualIndexesWarning() {
     if (!OGlobalConfiguration.INDEX_ALLOW_MANUAL_INDEXES.getValueAsBoolean()) {
       throw new OManualIndexesAreProhibited(
-          "Manual indexes are deprecated , not supported any more and will be removed in next versions if you still want to use them, "
+          "Manual indexes are deprecated, not supported any more and will be removed in next versions if you still want to use them, "
               + "please set global property `"
               + OGlobalConfiguration.INDEX_ALLOW_MANUAL_INDEXES.getKey()
               + "` to `true`");
@@ -1208,7 +1208,7 @@ public abstract class OIndexAbstract implements OIndexInternal {
           .warn(
               OIndexAbstract.class,
               "Seems you use manual indexes. "
-                  + "Manual indexes are deprecated , not supported any more and will be removed in next versions if you do not want "
+                  + "Manual indexes are deprecated, not supported any more and will be removed in next versions if you do not want "
                   + "to see warning, please set global property `"
                   + OGlobalConfiguration.INDEX_ALLOW_MANUAL_INDEXES_WARNING.getKey()
                   + "` to `false`");

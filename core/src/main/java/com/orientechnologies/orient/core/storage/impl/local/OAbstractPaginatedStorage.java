@@ -675,13 +675,18 @@ public abstract class OAbstractPaginatedStorage extends OStorageAbstract
 
   private void checkRidBagsPresence(final OAtomicOperation operation) {
     for (final OCluster cluster : clusters) {
-      final int clusterId = cluster.getId();
+      // FIXME: this should not be needed, no null clusters should be in the clusters list
+      if (cluster != null) {
+        final int clusterId = cluster.getId();
 
-      if (!sbTreeCollectionManager.isComponentPresent(operation, clusterId)) {
-        OLogManager.instance()
-            .info(
-                this, "Cluster with id %d does not have associated rid bag, fixing ...", clusterId);
-        sbTreeCollectionManager.createComponent(operation, clusterId);
+        if (!sbTreeCollectionManager.isComponentPresent(operation, clusterId)) {
+          OLogManager.instance()
+              .info(
+                  this,
+                  "Cluster with id %d does not have associated rid bag, fixing ...",
+                  clusterId);
+          sbTreeCollectionManager.createComponent(operation, clusterId);
+        }
       }
     }
   }
@@ -1104,7 +1109,6 @@ public abstract class OAbstractPaginatedStorage extends OStorageAbstract
     try {
       stateLock.acquireReadLock();
       try {
-        interruptionManager.enterCriticalPath();
         checkOpennessAndMigration();
         checkIfThreadIsBlocked();
 
@@ -1117,7 +1121,6 @@ public abstract class OAbstractPaginatedStorage extends OStorageAbstract
         return cluster.getName();
       } finally {
         stateLock.releaseReadLock();
-        interruptionManager.exitCriticalPath();
       }
 
     } catch (final RuntimeException ee) {
@@ -2567,12 +2570,12 @@ public abstract class OAbstractPaginatedStorage extends OStorageAbstract
       throws OInvalidIndexEngineIdException {
     for (OTransactionIndexChangesPerKey.OTransactionIndexEntry op :
         index.interpretTxKeyChanges(changes)) {
-      switch (op.operation) {
+      switch (op.getOperation()) {
         case PUT:
-          index.doPut(this, changes.key, op.value.getIdentity());
+          index.doPut(this, changes.key, op.getValue().getIdentity());
           break;
         case REMOVE:
-          if (op.value != null) index.doRemove(this, changes.key, op.value.getIdentity());
+          if (op.getValue() != null) index.doRemove(this, changes.key, op.getValue().getIdentity());
           else index.doRemove(this, changes.key);
           break;
         case CLEAR:
@@ -4116,7 +4119,6 @@ public abstract class OAbstractPaginatedStorage extends OStorageAbstract
     try {
       stateLock.acquireReadLock();
       try {
-        interruptionManager.enterCriticalPath();
         checkOpennessAndMigration();
         checkIfThreadIsBlocked();
 
@@ -4127,7 +4129,6 @@ public abstract class OAbstractPaginatedStorage extends OStorageAbstract
         return clusters.get(iClusterId) != null ? clusters.get(iClusterId).getName() : null;
       } finally {
         stateLock.releaseReadLock();
-        interruptionManager.exitCriticalPath();
       }
     } catch (final RuntimeException ee) {
       throw logAndPrepareForRethrow(ee);
@@ -5094,6 +5095,10 @@ public abstract class OAbstractPaginatedStorage extends OStorageAbstract
     return false;
   }
 
+  protected String getOpenedAtVersion() {
+    return null;
+  }
+
   private ORawBuffer readRecordIfNotLatest(final ORecordId rid, final int recordVersion)
       throws ORecordNotFoundException {
     checkOpennessAndMigration();
@@ -5250,6 +5255,17 @@ public abstract class OAbstractPaginatedStorage extends OStorageAbstract
                   + name
                   + "' was not closed properly. Will try to recover from write ahead log");
       try {
+        final String openedAtVersion = getOpenedAtVersion();
+
+        if (openedAtVersion != null && !openedAtVersion.equals(OConstants.getVersion())) {
+          throw new OStorageException(
+              "Database has been opened at version "
+                  + openedAtVersion
+                  + " but is attempted to be restored at version "
+                  + OConstants.getVersion()
+                  + ". Please use correct version to restore database.");
+        }
+
         wereDataRestoredAfterOpen = restoreFromWAL() != null;
 
         if (recoverListener != null) {
@@ -6526,7 +6542,7 @@ public abstract class OAbstractPaginatedStorage extends OStorageAbstract
           break;
         }
       }
-      if (!fullyLocked && !changes.nullKeyChanges.entries.isEmpty()) {
+      if (!fullyLocked && !changes.nullKeyChanges.isEmpty()) {
         index.acquireAtomicExclusiveLock(null);
       }
     }

@@ -82,16 +82,14 @@ public abstract class OrientGraphRemoteTest extends OrientGraphTest {
       else return graph;
     }
 
-    if (clientContext.exists(graphDirectoryName)) {
-      clientContext.drop(graphDirectoryName);
+    if (!clientContext.exists(graphDirectoryName)) {
+      clientContext.execute(
+          "create database "
+              + graphDirectoryName
+              + " "
+              + ODatabaseType.valueOf(OrientGraphTest.getStorageType().toUpperCase())
+              + " users ( admin identified by 'admin' role admin)");
     }
-
-    clientContext.execute(
-        "create database "
-            + graphDirectoryName
-            + " "
-            + ODatabaseType.valueOf(OrientGraphTest.getStorageType().toUpperCase())
-            + " users ( admin identified by 'admin' role admin)");
 
     OrientGraphFactory factory = graphFactories.get(url);
     if (factory == null) {

@@ -124,6 +124,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.Callable;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Document API entrypoint.
@@ -160,7 +161,7 @@ public abstract class ODatabaseDocumentAbstract extends OListenerManger<ODatabas
 
   protected OMicroTransaction microTransaction = null;
 
-  protected Map<String, OResultSet> activeQueries = new HashMap<>();
+  protected Map<String, OResultSet> activeQueries = new ConcurrentHashMap<>();
   private Map<UUID, OBonsaiCollectionPointer> collectionsChanges;
 
   // database stats!
@@ -616,22 +617,21 @@ public abstract class ODatabaseDocumentAbstract extends OListenerManger<ODatabas
   }
 
   @Override
-  public boolean declareIntent(final OIntent iIntent) {
+  public boolean declareIntent(final OIntent intent) {
     checkIfActive();
-
     if (currentIntent != null) {
-      if (iIntent != null && iIntent.getClass().equals(currentIntent.getClass()))
+      if (intent != null && intent.getClass().equals(currentIntent.getClass())) {
         // SAME INTENT: JUMP IT
         return false;
-
+      }
       // END CURRENT INTENT
       currentIntent.end(this);
     }
+    currentIntent = intent;
 
-    currentIntent = iIntent;
-
-    if (iIntent != null) iIntent.begin(this);
-
+    if (intent != null) {
+      intent.begin(this);
+    }
     return true;
   }
 
@@ -2005,12 +2005,18 @@ public abstract class ODatabaseDocumentAbstract extends OListenerManger<ODatabas
     return getStorage().incrementalBackup(path, null);
   }
 
-  public void checkClusterSecurity(
-      final int operation, final OIdentifiable record, String cluster) {
+  public void checkSecurity(final int operation, final OIdentifiable record, String cluster) {
     if (cluster == null) {
       cluster = getClusterNameById(record.getIdentity().getClusterId());
     }
     checkSecurity(ORule.ResourceGeneric.CLUSTER, operation, cluster);
+
+    if (record instanceof ODocument) {
+      String clazzName = ((ODocument) record).getClassName();
+      if (clazzName != null) {
+        checkSecurity(ORule.ResourceGeneric.CLASS, operation, clazzName);
+      }
+    }
   }
 
   /**
