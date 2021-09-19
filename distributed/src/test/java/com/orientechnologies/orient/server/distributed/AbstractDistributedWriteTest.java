@@ -24,7 +24,6 @@ import com.orientechnologies.orient.core.id.ORID;
 import com.orientechnologies.orient.core.index.OIndex;
 import com.orientechnologies.orient.core.record.impl.ODocument;
 import com.orientechnologies.orient.core.sql.query.OSQLSynchQuery;
-import com.orientechnologies.orient.server.distributed.impl.ODistributedOutput;
 import com.orientechnologies.orient.setup.ServerRun;
 import java.util.ArrayList;
 import java.util.Date;
@@ -207,26 +206,6 @@ public abstract class AbstractDistributedWriteTest extends AbstractServerCluster
   protected Callable<Void> createWriter(
       final int serverId, final int threadId, final ServerRun serverRun) {
     return new Writer(serverId, threadId);
-  }
-
-  protected void dumpDistributedDatabaseCfgOfAllTheServers() {
-    for (ServerRun s : serverInstance) {
-      final ODistributedServerManager dManager = s.getServerInstance().getDistributedManager();
-      final ODistributedConfiguration cfg = dManager.getDatabaseConfiguration(getDatabaseName());
-      final String cfgOutput =
-          ODistributedOutput.formatClusterTable(
-              dManager, getDatabaseName(), cfg, dManager.getAvailableNodes(getDatabaseName()));
-
-      ODistributedServerLog.info(
-          this,
-          s.getServerInstance().getDistributedManager().getLocalNodeName(),
-          null,
-          ODistributedServerLog.DIRECTION.NONE,
-          "Distributed configuration for database: %s (version=%d)%s\n",
-          getDatabaseName(),
-          cfg.getVersion(),
-          cfgOutput);
-    }
   }
 
   protected void checkThePersonClassIsPresentOnAllTheServers() {
