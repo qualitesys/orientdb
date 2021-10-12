@@ -31,11 +31,7 @@ import com.orientechnologies.orient.enterprise.channel.binary.OChannelBinaryProt
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.util.Date;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.RejectedExecutionHandler;
-import java.util.concurrent.ThreadPoolExecutor;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.*;
 
 /**
  * Remote server channel.
@@ -54,7 +50,7 @@ public class ORemoteServerChannel {
   private int protocolVersion;
   private ODistributedRequest prevRequest;
   private ODistributedResponse prevResponse;
-  private String localNodeName;
+  private final String localNodeName;
 
   private static final int MAX_RETRY = 3;
   private static final String CLIENT_TYPE = "OrientDB Server";
@@ -62,13 +58,13 @@ public class ORemoteServerChannel {
   private int sessionId = -1;
   private byte[] sessionToken;
   private OToken tokenInstance = null;
-  private OBinaryTokenSerializer tokenDeserializer = new OBinaryTokenSerializer();
-  private OContextConfiguration contextConfig = new OContextConfiguration();
-  private Date createdOn = new Date();
+  private final OBinaryTokenSerializer tokenDeserializer = new OBinaryTokenSerializer();
+  private final OContextConfiguration contextConfig = new OContextConfiguration();
+  private final Date createdOn = new Date();
 
   private volatile int totalConsecutiveErrors = 0;
   private static final int MAX_CONSECUTIVE_ERRORS = 10;
-  private ExecutorService executor;
+  private final ExecutorService executor;
 
   public ORemoteServerChannel(
       final ORemoteServerAvailabilityCheck check,
@@ -141,8 +137,16 @@ public class ORemoteServerChannel {
         try {
           connect();
           totalConsecutiveErrors = 0;
+          break;
         } catch (Exception e1) {
           handleNewError();
+          if (retry > 1) {
+            try {
+              Thread.sleep(100 * (retry * 2));
+            } catch (InterruptedException e2) {
+              break;
+            }
+          }
         }
       }
     }
@@ -282,12 +286,13 @@ public class ORemoteServerChannel {
 
         if (!check.isNodeAvailable(server)) break;
 
-        if (retry > 1)
+        if (retry > 1) {
           try {
             Thread.sleep(100 * (retry * 2));
           } catch (InterruptedException e1) {
             break;
           }
+        }
 
         try {
           connect();

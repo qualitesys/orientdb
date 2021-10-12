@@ -29,12 +29,7 @@ import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 import java.util.UUID;
-import java.util.concurrent.Callable;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.*;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import org.junit.Assert;
@@ -49,8 +44,8 @@ public abstract class AbstractDistributedWriteTest extends AbstractServerCluster
   // OPartitionedDatabasePoolFactory();
 
   class Writer implements Callable<Void> {
-    private int serverId;
-    private int threadId;
+    private final int serverId;
+    private final int threadId;
 
     public Writer(final int iServerId, final int iThreadId) {
       serverId = iServerId;
@@ -79,7 +74,7 @@ public abstract class AbstractDistributedWriteTest extends AbstractServerCluster
           final ODocument person = createRecord(database, i);
           updateRecord(database, i);
           checkRecord(database, i);
-          checkIndex(database, (String) person.field("name"), person.getIdentity());
+          checkIndex(database, person.field("name"), person.getIdentity());
 
           if (delayWriter > 0) Thread.sleep(delayWriter);
 

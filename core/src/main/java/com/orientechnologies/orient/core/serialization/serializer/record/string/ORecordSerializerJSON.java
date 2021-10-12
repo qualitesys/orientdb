@@ -19,7 +19,10 @@
  */
 package com.orientechnologies.orient.core.serialization.serializer.record.string;
 
-import com.fasterxml.jackson.core.*;
+import com.fasterxml.jackson.core.JsonFactory;
+import com.fasterxml.jackson.core.JsonParseException;
+import com.fasterxml.jackson.core.JsonParser;
+import com.fasterxml.jackson.core.JsonToken;
 import com.orientechnologies.common.collection.OMultiValue;
 import com.orientechnologies.common.exception.OException;
 import com.orientechnologies.common.io.OIOUtils;
@@ -29,12 +32,7 @@ import com.orientechnologies.common.util.OCommonConst;
 import com.orientechnologies.orient.core.Orient;
 import com.orientechnologies.orient.core.db.ODatabaseRecordThreadLocal;
 import com.orientechnologies.orient.core.db.document.ODatabaseDocument;
-import com.orientechnologies.orient.core.db.record.OIdentifiable;
-import com.orientechnologies.orient.core.db.record.ORecordLazyList;
-import com.orientechnologies.orient.core.db.record.ORecordLazyMultiValue;
-import com.orientechnologies.orient.core.db.record.ORecordLazySet;
-import com.orientechnologies.orient.core.db.record.OTrackedList;
-import com.orientechnologies.orient.core.db.record.OTrackedSet;
+import com.orientechnologies.orient.core.db.record.*;
 import com.orientechnologies.orient.core.db.record.ridbag.ORidBag;
 import com.orientechnologies.orient.core.exception.OSerializationException;
 import com.orientechnologies.orient.core.fetch.OFetchHelper;
@@ -49,24 +47,13 @@ import com.orientechnologies.orient.core.metadata.schema.OType;
 import com.orientechnologies.orient.core.record.ORecord;
 import com.orientechnologies.orient.core.record.ORecordInternal;
 import com.orientechnologies.orient.core.record.ORecordStringable;
-import com.orientechnologies.orient.core.record.impl.OBlob;
-import com.orientechnologies.orient.core.record.impl.ODocument;
-import com.orientechnologies.orient.core.record.impl.ODocumentEmbedded;
-import com.orientechnologies.orient.core.record.impl.ODocumentHelper;
-import com.orientechnologies.orient.core.record.impl.ODocumentInternal;
+import com.orientechnologies.orient.core.record.impl.*;
 import com.orientechnologies.orient.core.serialization.serializer.OJSONWriter;
 import com.orientechnologies.orient.core.serialization.serializer.OStringSerializerHelper;
 import com.orientechnologies.orient.core.util.ODateHelper;
 import java.io.*;
 import java.text.ParseException;
-import java.util.Base64;
-import java.util.Collection;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 
 @SuppressWarnings("serial")
 public class ORecordSerializerJSON extends ORecordSerializerStringAbstract {
@@ -599,11 +586,9 @@ public class ORecordSerializerJSON extends ORecordSerializerStringAbstract {
       }
 
       if (value instanceof OTrackedSet<?>) {
-        if (OMultiValue.getFirstValue((Set<?>) value) instanceof OIdentifiable)
-          type = OType.LINKSET;
+        if (OMultiValue.getFirstValue(value) instanceof OIdentifiable) type = OType.LINKSET;
       } else if (value instanceof OTrackedList<?>) {
-        if (OMultiValue.getFirstValue((List<?>) value) instanceof OIdentifiable)
-          type = OType.LINKLIST;
+        if (OMultiValue.getFirstValue(value) instanceof OIdentifiable) type = OType.LINKLIST;
       }
 
       if (type != null) {
@@ -704,9 +689,9 @@ public class ORecordSerializerJSON extends ORecordSerializerStringAbstract {
         type = ORecordSerializerStringAbstract.getType(fieldValue, fieldTypes.get(fieldName));
 
       if (v instanceof OTrackedSet<?>) {
-        if (OMultiValue.getFirstValue((Set<?>) v) instanceof OIdentifiable) type = OType.LINKSET;
+        if (OMultiValue.getFirstValue(v) instanceof OIdentifiable) type = OType.LINKSET;
       } else if (v instanceof OTrackedList<?>) {
-        if (OMultiValue.getFirstValue((List<?>) v) instanceof OIdentifiable) type = OType.LINKLIST;
+        if (OMultiValue.getFirstValue(v) instanceof OIdentifiable) type = OType.LINKLIST;
       }
 
       if (type != null) doc.setProperty(fieldName, v, type);

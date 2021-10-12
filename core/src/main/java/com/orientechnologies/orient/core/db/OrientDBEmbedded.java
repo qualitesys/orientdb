@@ -19,9 +19,7 @@
  */
 package com.orientechnologies.orient.core.db;
 
-import static com.orientechnologies.orient.core.config.OGlobalConfiguration.FILE_DELETE_DELAY;
-import static com.orientechnologies.orient.core.config.OGlobalConfiguration.FILE_DELETE_RETRY;
-import static com.orientechnologies.orient.core.config.OGlobalConfiguration.WARNING_DEFAULT_USERS;
+import static com.orientechnologies.orient.core.config.OGlobalConfiguration.*;
 
 import com.orientechnologies.common.concur.lock.OModificationOperationProhibitedException;
 import com.orientechnologies.common.exception.OException;
@@ -56,29 +54,9 @@ import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.UncheckedIOException;
-import java.nio.file.DirectoryStream;
-import java.nio.file.FileStore;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.Timer;
-import java.util.TimerTask;
-import java.util.concurrent.Callable;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Future;
-import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.ThreadPoolExecutor;
-import java.util.concurrent.TimeUnit;
+import java.nio.file.*;
+import java.util.*;
+import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 import org.apache.commons.lang.NullArgumentException;
@@ -102,8 +80,8 @@ public class OrientDBEmbedded implements OrientDBInternal {
   protected final Orient orient;
   protected final OCachedDatabasePoolFactory cachedPoolFactory;
   private volatile boolean open = true;
-  private ExecutorService executor;
-  private Timer timer;
+  private final ExecutorService executor;
+  private final Timer timer;
   private TimerTask autoCloseTimer = null;
   private final OScriptManager scriptManager = new OScriptManager();
   private final OSystemDatabase systemDatabase;
@@ -187,8 +165,7 @@ public class OrientDBEmbedded implements OrientDBInternal {
     }
     systemDatabase = new OSystemDatabase(this);
     securitySystem = new ODefaultSecuritySystem();
-    ((ODefaultSecuritySystem) securitySystem)
-        .activate(this, this.configurations.getSecurityConfig());
+    securitySystem.activate(this, this.configurations.getSecurityConfig());
   }
 
   protected OCachedDatabasePoolFactory createCachedDatabasePoolFactory(OrientDBConfig config) {
@@ -854,6 +831,11 @@ public class OrientDBEmbedded implements OrientDBInternal {
       } else return false;
     }
     return storage.exists();
+  }
+
+  @Override
+  public void internalDrop(String database) {
+    this.drop(database, null, null);
   }
 
   @Override
